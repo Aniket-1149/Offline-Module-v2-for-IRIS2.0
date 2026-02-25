@@ -1,0 +1,41 @@
+# IRIS 2.0 Offline Module — .gitignore
+
+# TLS certificates (generated locally — never commit private keys)
+*.pem
+*.key
+*.crt
+*.p12
+
+# YOLO model weights (large binary — distribute separately)
+*.pt
+*.onnx
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+venv/
+.venv/
+env/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/

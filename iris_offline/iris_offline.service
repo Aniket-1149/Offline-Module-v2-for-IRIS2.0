@@ -1,0 +1,49 @@
+[Unit]
+Description=IRIS 2.0 Offline AI Module
+Documentation=https://github.com/iris-ai/offline-module
+After=network.target
+Wants=network.target
+
+[Service]
+# ─── Identity ───────────────────────────────────────────────────────────────
+User=iris
+Group=iris
+
+# ─── Working directory & command ────────────────────────────────────────────
+WorkingDirectory=/opt/iris_offline
+ExecStart=/opt/iris_offline/venv/bin/python main.py
+
+# ─── Restart behaviour ──────────────────────────────────────────────────────
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+# ─── Environment ────────────────────────────────────────────────────────────
+Environment="PYTHONUNBUFFERED=1"
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=/home/iris/.Xauthority"
+
+# ─── Resource limits (protect rest of system) ───────────────────────────────
+# 6 GB RAM ceiling — leaves 2 GB for OS
+MemoryMax=6G
+MemoryHigh=5G
+CPUQuota=380%
+
+# ─── Logging ────────────────────────────────────────────────────────────────
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=iris_offline
+
+# ─── Security hardening ─────────────────────────────────────────────────────
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/log /opt/iris_offline
+DeviceAllow=/dev/gpiomem rw
+DeviceAllow=/dev/i2c-1  rw
+DeviceAllow=/dev/video0 rw
+SupplementaryGroups=gpio i2c video dialout
+
+[Install]
+WantedBy=multi-user.target
