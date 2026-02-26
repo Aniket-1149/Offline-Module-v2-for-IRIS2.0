@@ -84,21 +84,12 @@ info "  Dependencies up to date"
 cp "${INSTALL_DIR}/iris_offline.service" /etc/systemd/system/
 systemctl daemon-reload
 
-# ─── 5. Restart service ───────────────────────────────────────────────────────
-info "Restarting IRIS service..."
-systemctl restart iris_offline
-sleep 2
-
-# ─── 6. Status ────────────────────────────────────────────────────────────────
-echo ""
-section
-systemctl --no-pager status iris_offline || true
-
 PI_IP=$(hostname -I | awk '{print $1}')
 section
 info "=== Update Complete ==="
 echo ""
-echo "  IRIS is running the latest code."
+echo "  Code is synced. Run IRIS manually:"
+echo "    sudo -u iris /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
+echo ""
 echo "  JSON endpoint  : https://${PI_IP}:5000/vision"
-echo "  Watch logs:      sudo journalctl -u iris_offline -f"
 section

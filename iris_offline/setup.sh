@@ -76,7 +76,7 @@ if $FRESH_INSTALL; then
         libhdf5-dev \
         libopenblas-dev libblas-dev liblapack-dev \
         libjpeg-dev libpng-dev \
-        i2c-tools libcamera-dev libcamera-apps \
+        i2c-tools libcamera-dev rpicam-apps \
         openssl git rsync htop iotop logrotate
 
     # ─── 3. Enable I2C, Camera, GPU memory ───────────────────────────────────
@@ -231,18 +231,11 @@ if [[ ! -f "${LOG_FILE}" ]]; then
 EOF
 fi
 
-# ─── 10. Install / reload systemd service ────────────────────────────────────
-info "Step 10: Installing systemd service..."
+# ─── 10. Install systemd service file (not enabled — manual run preferred) ───
+info "Step 10: Installing systemd service file..."
 cp "${INSTALL_DIR}/${SERVICE_FILE}" /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable iris_offline.service
-
-if systemctl is-active --quiet iris_offline 2>/dev/null; then
-    systemctl restart iris_offline
-    info "  Service restarted with latest code"
-else
-    info "  Service enabled — will auto-start on next boot"
-fi
+info "  Service file installed (not enabled — run IRIS manually, see below)"
 
 # =============================================================================
 # FRESH INSTALL ONLY — final checks and tuning
@@ -290,21 +283,16 @@ echo ""
 if $FRESH_INSTALL; then
     warn "REBOOT REQUIRED to activate I2C and camera interface changes."
     echo ""
-    echo "  After reboot, IRIS starts automatically."
-    echo "  Start now without rebooting:  sudo systemctl start iris_offline"
-    echo "  Check status:                 sudo systemctl status iris_offline"
-    echo "  Watch logs:                   sudo journalctl -u iris_offline -f"
+    echo "  After reboot, run IRIS manually:"
+    echo "    sudo -u iris /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
     echo ""
     if [[ -n "${REPO_URL}" ]]; then
         echo "  ─── Updating later ──────────────────────────────────────────"
         echo "  After you commit and push code changes, re-run on the Pi:"
-        echo "    sudo bash ${INSTALL_DIR}/setup.sh"
-        echo "  Or use the faster update script:"
         echo "    sudo bash ${INSTALL_DIR}/update.sh"
     fi
 else
-    echo "  IRIS is now running the latest code."
-    echo "  Check status:  sudo systemctl status iris_offline"
-    echo "  Watch logs:    sudo journalctl -u iris_offline -f"
+    echo "  Code is up to date. Run IRIS manually:"
+    echo "    sudo -u iris /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
 fi
 section

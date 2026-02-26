@@ -1,6 +1,6 @@
 [Unit]
 Description=IRIS 2.0 Offline AI Module
-Documentation=https://github.com/iris-ai/offline-module
+Documentation=https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0
 After=network.target
 Wants=network.target
 

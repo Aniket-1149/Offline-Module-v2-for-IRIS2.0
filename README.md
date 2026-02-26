@@ -1,6 +1,8 @@
 # IRIS 2.0 — Intelligent Real-time Inference System
 ### An Offline AI Vision Assistant for the Visually Impaired
 
+**GitHub:** [thekaushal01/Offline-Module-v2-for-IRIS2.0](https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0)
+
 IRIS 2.0 runs entirely offline on a **Raspberry Pi 5 (8GB)**, helping visually impaired users navigate their environment safely.
 It detects nearby objects, measures obstacle distance, monitors for falls, and streams structured data to a companion mobile app — which handles text-to-speech announcements.
 No internet connection required. Designed for real-world, long-term wearable or portable use.
@@ -77,7 +79,7 @@ iris_offline/
 ├── server.py             # Flask HTTPS JSON server
 ├── utils.py              # shared state, data models, helpers
 ├── requirements.txt      # Python packages
-├── iris_offline.service  # systemd service for auto-start on boot
+├── iris_offline.service  # systemd service file (manual start)
 ├── setup.sh              # full install + re-setup script (idempotent)
 └── update.sh             # quick update: git pull → sync → restart
 ```
@@ -113,7 +115,8 @@ sudo reboot
 
 ```bash
 sudo i2cdetect -y 1            # MPU9250 should show as 68 (or 69)
-libcamera-hello --list-cameras # Pi camera should be listed
+rpicam-still --list-cameras    # Pi camera should be listed
+rpicam-still -t 0              # opens live camera preview — press Ctrl+C to exit
 ```
 
 ---
@@ -136,7 +139,7 @@ The script handles everything automatically:
 - Sets up a Python virtual environment
 - Downloads the YOLOv8n model
 - Generates a self-signed TLS certificate
-- Installs and enables the systemd service
+- Installs the systemd service file
 - Applies Pi 5 performance tuning
 
 > The first run takes 10–15 minutes (mostly pip + model download). Subsequent re-runs take under a minute.
@@ -147,11 +150,30 @@ When the script finishes, reboot to activate I2C and camera changes:
 sudo reboot
 ```
 
-After reboot, IRIS starts automatically. Check it:
+After reboot, run IRIS manually from the terminal:
 
 ```bash
-sudo systemctl status iris_offline
-sudo journalctl -u iris_offline -f
+sudo -u iris /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py
+```
+
+The OpenCV dashboard window will open and the JSON API will be live.
+Press `Ctrl+C` to stop.
+
+**Verify it's working** (open a second terminal while IRIS is running):
+
+```bash
+# Quick health check
+curl -k https://localhost:5000/health
+
+# Full JSON output (detections, distance, fall status)
+curl -k https://localhost:5000/vision
+
+# Stream — get your Pi's IP first, then open in a browser on your PC
+hostname -I
+# Then open in any browser:  https://<pi_ip>:5000/stream
+# Or test locally on the Pi:
+curl -k --max-time 3 -o /dev/null -w "%{http_code}" https://localhost:5000/stream
+# Should print 200
 ```
 
 ---
@@ -164,7 +186,8 @@ Whenever you edit code on your PC, commit, and push — run this single command 
 sudo bash /opt/iris_offline/update.sh
 ```
 
-This does: `git pull` → sync changed files → pip install (if needed) → restart service. Takes under 30 seconds.
+This does: `git pull` → sync changed files → pip install (if needed). Takes under 30 seconds.
+Then run IRIS again manually as usual.
 
 **What is preserved across updates:**
 - TLS certificate (`cert.pem` / `key.pem`) — never regenerated unless expired
@@ -182,8 +205,8 @@ git commit -m "fix: ..."
 git push
                      ──────→  sudo bash /opt/iris_offline/update.sh
                                ✓ pulled 3 files
-                               ✓ service restarted
-                               ✓ IRIS running latest code
+                               ✓ code synced
+                     run IRIS: sudo -u iris /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py
 ```
 
 If you ever need to fully re-install from scratch (new Pi, or something broken):
@@ -298,7 +321,8 @@ sudo modprobe i2c-dev        # force-load the I2C module
 
 ### Camera not found
 ```bash
-libcamera-hello --list-cameras   # should list at least one camera
+rpicam-still --list-cameras    # should list at least one camera
+rpicam-still -t 0              # opens live preview — if this works, camera is fine
 python3 -c "from picamera2 import Picamera2; print(Picamera2.global_camera_info())"
 # If nothing shows: check ribbon cable is firmly seated in CAM0 port
 # Make sure camera is enabled: sudo raspi-config → Interface Options → Camera
@@ -317,6 +341,26 @@ curl -k https://localhost:5000/vision   # test locally first
 ss -tlnp | grep 5000                    # confirm port is open
 sudo journalctl -u iris_offline -f      # check for Flask errors
 # On mobile app: install cert.pem as a trusted CA to avoid SSL errors
+```
+
+### Stream endpoint not loading
+```bash
+# 1. Check IRIS is actually running
+ps aux | grep main.py
+
+# 2. Confirm port 5000 is open
+ss -tlnp | grep 5000
+
+# 3. Test the stream responds
+curl -k --max-time 3 -o /dev/null -w "%{http_code}" https://localhost:5000/stream
+# Should print 200. If it prints 000, Flask isn't running.
+
+# 4. Open in browser on your PC (accept the self-signed cert warning)
+# https://<pi_ip>:5000/stream
+# Get your Pi IP with:  hostname -I
+
+# 5. If browser says "certificate error" — click Advanced → Proceed
+# Or copy cert.pem from the Pi to your PC and install it as a trusted CA
 ```
 
 ### Low FPS
@@ -349,3 +393,7 @@ You can swap `yolov8n.pt` for a larger model if you need better accuracy:
 
 ## License
 MIT — Internal deployment only. Not for redistribution.
+
+---
+
+[github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0](https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0)
