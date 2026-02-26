@@ -1,6 +1,6 @@
 """
-vision.py — handles everything camera-related: grabbing frames from the ArduCam
-and running them through YOLOv8n to figure out what's in the scene.
+vision.py — handles everything camera-related: grabbing frames from the Pi camera
+using picamera2 and running them through YOLOv8n to figure out what's in the scene.
 """
 
 import logging
@@ -22,6 +22,16 @@ try:
 except ImportError:
     _YOLO_AVAILABLE = False
     log.warning("ultralytics not installed — vision will produce no detections")
+
+# picamera2 is the official Pi camera library — installed as a system package
+# on Raspberry Pi OS. It sits on top of libcamera and is the right way to talk
+# to any Pi CSI camera (Camera Module v1/v2/v3, ArduCam, HQ Camera, etc.)
+try:
+    from picamera2 import Picamera2
+    _PICAM2_AVAILABLE = True
+except ImportError:
+    _PICAM2_AVAILABLE = False
+    log.warning("picamera2 not available — camera frames will be unavailable")
 
 from utils import SharedState, Detection, FPSCounter
 
@@ -58,71 +68,65 @@ _PALETTE = [
 
 class CameraSource:
     """
-    Thin wrapper around cv2.VideoCapture that knows how to reopen the camera
-    if it disconnects. Works with the CSI ArduCam via GStreamer, and falls
-    back to plain V4L2 if GStreamer isn't available.
+    Grabs frames from the Pi camera using picamera2.
+    picamera2 is libcamera-based, so it works with every CSI camera on the Pi
+    without needing GStreamer or V4L2 tricks.
+    Returns BGR frames so the rest of the pipeline (OpenCV, YOLO) gets what it expects.
     """
 
-    # GStreamer gives us the best quality and lowest latency on the RPi5 CSI camera.
-    # If this doesn't work on your setup, set use_gstreamer=False in __init__.
-    _GSTREAMER_PIPELINE = (
-        "libcamerasrc ! "
-        "video/x-raw,width=640,height=480,framerate=30/1 ! "
-        "videoconvert ! appsink max-buffers=1 drop=true"
-    )
-
-    def __init__(self, index: int = 0, use_gstreamer: bool = True) -> None:
-        self._index = index
-        self._use_gstreamer = use_gstreamer
-        self._cap: Optional[cv2.VideoCapture] = None
+    def __init__(self) -> None:
+        self._cam: Optional["Picamera2"] = None
         self._lock = threading.Lock()
+        self._started = False
 
     def open(self) -> bool:
         with self._lock:
-            self._release_internal()
-            self._cap = self._try_open()
-            if self._cap and self._cap.isOpened():
-                log.info("Camera opened successfully")
+            self._close_internal()
+            if not _PICAM2_AVAILABLE:
+                log.warning("picamera2 not installed — running without camera")
+                return False
+            try:
+                self._cam = Picamera2()
+                config = self._cam.create_preview_configuration(
+                    main={"size": (FRAME_WIDTH, FRAME_HEIGHT), "format": "RGB888"},
+                    buffer_count=2,   # two buffers is enough — keeps memory low and frames fresh
+                )
+                self._cam.configure(config)
+                self._cam.start()
+                self._started = True
+                log.info("PiCamera2 started at %dx%d", FRAME_WIDTH, FRAME_HEIGHT)
                 return True
-            log.error("Failed to open camera")
-            return False
-
-    def _try_open(self) -> Optional[cv2.VideoCapture]:
-        # first shot: GStreamer pipeline — best option for the ArduCam on RPi5
-        if self._use_gstreamer:
-            cap = cv2.VideoCapture(self._GSTREAMER_PIPELINE, cv2.CAP_GSTREAMER)
-            if cap.isOpened():
-                log.info("Camera: GStreamer pipeline active")
-                return cap
-            log.warning("GStreamer pipeline failed, falling back to V4L2 index %d", self._index)
-
-        # GStreamer didn't work — try reading directly from the V4L2 device node
-        cap = cv2.VideoCapture(self._index, cv2.CAP_V4L2)
-        if not cap.isOpened():
-            cap = cv2.VideoCapture(self._index)   # last resort, let OpenCV figure it out
-        if cap.isOpened():
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  FRAME_WIDTH)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
-            cap.set(cv2.CAP_PROP_FPS, 30)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)   # keep the buffer tiny so frames stay fresh
-            log.info("Camera: V4L2 device %d active", self._index)
-        return cap
+            except Exception as exc:
+                log.error("PiCamera2 open failed: %s", exc)
+                self._close_internal()
+                return False
 
     def read(self) -> Tuple[bool, Optional[np.ndarray]]:
         with self._lock:
-            if self._cap is None or not self._cap.isOpened():
+            if not self._started or self._cam is None:
                 return False, None
-            ret, frame = self._cap.read()
-            return ret, frame
+            try:
+                # picamera2 gives us RGB — flip to BGR because that's what OpenCV and YOLO want
+                rgb = self._cam.capture_array()
+                bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                return True, bgr
+            except Exception as exc:
+                log.warning("PiCamera2 read error: %s", exc)
+                return False, None
 
     def release(self) -> None:
         with self._lock:
-            self._release_internal()
+            self._close_internal()
 
-    def _release_internal(self) -> None:
-        if self._cap is not None:
-            self._cap.release()
-            self._cap = None
+    def _close_internal(self) -> None:
+        if self._cam is not None:
+            try:
+                self._cam.stop()
+                self._cam.close()
+            except Exception:
+                pass
+            self._cam = None
+        self._started = False
 
 
 # ---------------------------------------------------------------------------
