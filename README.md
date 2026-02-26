@@ -22,7 +22,7 @@ No internet connection required. Designed for real-world, long-term wearable or 
 ## Hardware Required
 
 - Raspberry Pi 5 (8GB)
-- ArduCam 8MP (CSI ribbon to CAM0 port)
+- Pi Camera Module (any CSI camera — Camera Module v2/v3, HQ Camera, ArduCam)
 - HC-SR04 Ultrasonic Sensor
 - MPU9250 IMU breakout board
 - 1kΩ and 2kΩ resistors (for HC-SR04 ECHO voltage divider)
@@ -34,41 +34,38 @@ No internet connection required. Designed for real-world, long-term wearable or 
 
 ### HC-SR04 — Ultrasonic Distance Sensor
 
-| HC-SR04 | Pi Pin | BCM | Note |
-|---------|--------|-----|------|
-| VCC | Pin 2 | — | 5V |
-| GND | Pin 6 | — | Ground |
-| TRIG | Pin 16 | GPIO23 | Output — 3.3V safe |
-| ECHO | Pin 18 | GPIO24 | **Must use voltage divider** |
+| HC-SR04 Pin | Connection | Raspberry Pi Pin | Notes |
+|-------------|------------|------------------|---------|
+| **VCC** | → | **5V** (Pin 2 or 4) | Power supply |
+| **GND** | → | **GND** (Pin 6) | Ground |
+| **TRIG** | → | **GPIO23** (Pin 16) | Trigger (3.3V output from Pi is OK) |
+| **ECHO** | ⚠️ | **GPIO24** (Pin 18) | **MUST USE VOLTAGE DIVIDER!** |
 
 The HC-SR04 ECHO pin outputs 5V. The Pi GPIO only tolerates 3.3V.
 Build this simple voltage divider between ECHO and GPIO24:
 
 ```
 HC-SR04 ECHO ─── 1kΩ ─── GPIO24 (Pin 18)
-                               │
-                              2kΩ
-                               │
-                             GND
+                           │
+                          2kΩ
+                           │
+                         GND
 ```
 
-### MPU9250 — IMU (I2C)
+### MPU9250 — 9-Axis IMU (I2C)
 
-| MPU9250 | Pi Pin | BCM | Note |
-|---------|--------|-----|------|
-| VCC | Pin 1 | — | 3.3V only — do not use 5V |
-| GND | Pin 6 | — | Ground |
-| SDA | Pin 3 | GPIO2 | I2C data |
-| SCL | Pin 5 | GPIO3 | I2C clock |
-| AD0 | GND | — | Sets I2C address to 0x68 |
+| MPU9250 Pin | Connection | Raspberry Pi Pin | Notes |
+|-------------|------------|------------------|---------|
+| **VCC** | → | **3.3V** (Pin 1) | ⚠️ 3.3V ONLY! Do not use 5V |
+| **GND** | → | **GND** (Pin 6) | Ground |
+| **SDA** | → | **GPIO2 (SDA)** (Pin 3) | I2C Data |
+| **SCL** | → | **GPIO3 (SCL)** (Pin 5) | I2C Clock |
+| **AD0** | ↓ | GND or Float | I2C address (GND = 0x68, VCC = 0x69) |
 
-### ArduCam 8MP
+### Pi Camera (CSI)
 
-Connect via CSI-2 ribbon cable to the **CAM0** port on the Pi 5. No GPIO needed.
-
----
-
-## Project Files
+Connect via CSI-2 ribbon cable to the **CAM0** port on Pi 5. No GPIO needed.
+Works with any Pi CSI camera: Camera Module v2/v3, HQ Camera, ArduCam, etc.
 
 ```
 iris_offline/
@@ -81,15 +78,16 @@ iris_offline/
 ├── utils.py              # shared state, data models, helpers
 ├── requirements.txt      # Python packages
 ├── iris_offline.service  # systemd service for auto-start on boot
-└── setup.sh              # automated setup script
+├── setup.sh              # full install + re-setup script (idempotent)
+└── update.sh             # quick update: git pull → sync → restart
 ```
 
 ---
 
-## Complete Setup — Step by Step (Raspberry Pi Terminal)
+## Setup
 
 > Run all commands below directly in your Raspberry Pi terminal.
-> You must be connected (via TigerVNC, SSH, or keyboard) to run these.
+> Connect via SSH, TigerVNC, or a keyboard+monitor.
 
 ---
 
@@ -97,31 +95,11 @@ iris_offline/
 
 Use **Raspberry Pi Imager** on your PC:
 - OS: **Raspberry Pi OS Lite 64-bit (Bookworm)**
-- Enable SSH in Imager settings so you can log in remotely
+- Enable SSH in Imager settings (Ctrl+Shift+X) so you can log in remotely
 
 ---
 
-### Step 2 — First Boot: Update the System
-
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo reboot
-```
-
----
-
-### Step 3 — Enable I2C and Camera
-
-```bash
-sudo raspi-config
-```
-
-Inside raspi-config:
-- **Interface Options → I2C → Enable**
-- **Interface Options → Camera → Enable**
-- **Finish → Reboot when asked**
-
-Or enable them directly without the menu:
+### Step 2 — Enable I2C and Camera
 
 ```bash
 sudo raspi-config nonint do_i2c 0
@@ -131,152 +109,89 @@ sudo reboot
 
 ---
 
-### Step 4 — Verify Hardware is Detected
+### Step 3 — Verify Hardware
 
-**Check MPU9250 on I2C bus:**
 ```bash
-sudo apt install -y i2c-tools
-sudo i2cdetect -y 1
-```
-You should see `68` in the grid (or `69` if ADO is connected to 3.3V instead of GND).
-
-**Check ArduCam:**
-```bash
-libcamera-hello --list-cameras
-```
-You should see at least one camera listed.
-
-**Quick test photo:**
-```bash
-libcamera-jpeg -o ~/test.jpg
-ls -lh ~/test.jpg   # should be a non-empty file
+sudo i2cdetect -y 1            # MPU9250 should show as 68 (or 69)
+libcamera-hello --list-cameras # Pi camera should be listed
 ```
 
 ---
 
-### Step 5 — Install System Dependencies
+### Step 4 — Run the Setup Script
+
+Clone the repo and run `setup.sh` in one go:
 
 ```bash
-sudo apt install -y \
-    python3 python3-pip python3-venv python3-dev \
-    python3-opencv libopencv-dev \
-    libatlas-base-dev libhdf5-dev \
-    libopenblas-dev libblas-dev liblapack-dev \
-    libjpeg-dev libpng-dev \
-    libcamera-dev libcamera-apps \
-    v4l-utils openssl git htop
+sudo apt install -y git
+git clone https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0.git ~/iris_offline_src
+sudo bash ~/iris_offline_src/iris_offline/setup.sh https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0.git
 ```
 
----
+The script handles everything automatically:
+- Installs all system and Python dependencies
+- Enables I2C, camera, GPU memory in `config.txt`
+- Creates the `iris` system user
+- Sets up a Python virtual environment
+- Downloads the YOLOv8n model
+- Generates a self-signed TLS certificate
+- Installs and enables the systemd service
+- Applies Pi 5 performance tuning
 
-### Step 6 — Clone the Project
+> The first run takes 10–15 minutes (mostly pip + model download). Subsequent re-runs take under a minute.
+
+When the script finishes, reboot to activate I2C and camera changes:
 
 ```bash
-git clone <your_repo_url> ~/iris_offline
-cd ~/iris_offline
+sudo reboot
 ```
 
----
-
-### Step 7 — Create Python Virtual Environment
+After reboot, IRIS starts automatically. Check it:
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
----
-
-### Step 8 — Install Python Packages
-
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-This installs: `ultralytics` (YOLOv8), `opencv-python-headless`, `flask`, `smbus2`, `RPi.GPIO`, and others.
-
-> The first install may take 5–10 minutes on the Pi. This is normal.
-
----
-
-### Step 9 — Download the YOLOv8n Model
-
-```bash
-python3 -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
-```
-
-This downloads `yolov8n.pt` (~6MB) into the current directory. Only needed once.
-
----
-
-### Step 10 — Generate TLS Certificate
-
-The HTTPS server needs a certificate. Run this once:
-
-```bash
-PI_IP=$(hostname -I | awk '{print $1}')
-
-openssl req -x509 -newkey rsa:4096 -sha256 -days 1095 \
-    -nodes \
-    -keyout key.pem \
-    -out cert.pem \
-    -subj "/CN=iris-offline/O=IRIS2/C=US" \
-    -addext "subjectAltName=IP:${PI_IP},IP:127.0.0.1,DNS:localhost"
-
-echo "Certificate generated for IP: ${PI_IP}"
-```
-
----
-
-### Step 11 — Run IRIS
-
-```bash
-cd ~/iris_offline
-source venv/bin/activate
-python main.py
-```
-
-The dashboard window will appear on the display.
-The JSON API will be live at:
-
-```
-https://<raspberry_pi_ip>:5000/vision
-```
-
-Test it from another terminal:
-```bash
-curl -k https://localhost:5000/vision
-curl -k https://localhost:5000/health
-```
-
----
-
-### Step 12 — (Optional) Auto-start on Boot with systemd
-
-Do this when you're ready to deploy and want IRIS to start automatically every time the Pi powers on:
-
-```bash
-# Copy the service file
-sudo cp ~/iris_offline/iris_offline.service /etc/systemd/system/
-
-# Reload systemd and enable the service
-sudo systemctl daemon-reload
-sudo systemctl enable iris_offline
-sudo systemctl start iris_offline
-
-# Check it's running
 sudo systemctl status iris_offline
-
-# Watch live logs
 sudo journalctl -u iris_offline -f
 ```
 
-To stop or restart:
+---
+
+## Updating After Code Changes
+
+Whenever you edit code on your PC, commit, and push — run this single command on the Pi:
+
 ```bash
-sudo systemctl stop iris_offline
-sudo systemctl restart iris_offline
+sudo bash /opt/iris_offline/update.sh
 ```
+
+This does: `git pull` → sync changed files → pip install (if needed) → restart service. Takes under 30 seconds.
+
+**What is preserved across updates:**
+- TLS certificate (`cert.pem` / `key.pem`) — never regenerated unless expired
+- YOLOv8n model (`yolov8n.pt`) — never re-downloaded
+- Python virtual environment — only updated if `requirements.txt` changed
+
+**Typical workflow:**
+
+```
+Your PC (VS Code)              Raspberry Pi
+─────────────────              ─────────────────────────────────────
+Edit code
+git add .
+git commit -m "fix: ..."
+git push
+                     ──────→  sudo bash /opt/iris_offline/update.sh
+                               ✓ pulled 3 files
+                               ✓ service restarted
+                               ✓ IRIS running latest code
+```
+
+If you ever need to fully re-install from scratch (new Pi, or something broken):
+
+```bash
+sudo bash /opt/iris_offline/setup.sh
+```
+
+The same `setup.sh` does both full setup and re-setup. It skips steps that are already done (existing cert, existing user, etc.).
 
 ---
 
@@ -383,9 +298,9 @@ sudo modprobe i2c-dev        # force-load the I2C module
 ### Camera not found
 ```bash
 libcamera-hello --list-cameras   # should list at least one camera
-ls /dev/video*                   # check device node exists
-v4l2-ctl --list-devices          # alternative check
-# If GStreamer fails in vision.py: set use_gstreamer=False in CameraSource
+python3 -c "from picamera2 import Picamera2; print(Picamera2.global_camera_info())"
+# If nothing shows: check ribbon cable is firmly seated in CAM0 port
+# Make sure camera is enabled: sudo raspi-config → Interface Options → Camera
 ```
 
 ### HC-SR04 giving wrong values
