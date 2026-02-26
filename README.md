@@ -124,7 +124,8 @@ Clone the repo and run `setup.sh` in one go:
 
 ```bash
 sudo apt install -y git
-git clone https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0.git ~/iris_offline_src
+git clone https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0.git ~/iris_offline_src \
+    || git -C ~/iris_offline_src pull
 sudo bash ~/iris_offline_src/iris_offline/setup.sh https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0.git
 ```
 

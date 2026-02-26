@@ -73,7 +73,7 @@ if $FRESH_INSTALL; then
         python3 python3-pip python3-venv python3-dev \
         python3-opencv python3-picamera2 \
         libopencv-dev \
-        libatlas-base-dev libhdf5-dev \
+        libhdf5-dev \
         libopenblas-dev libblas-dev liblapack-dev \
         libjpeg-dev libpng-dev \
         i2c-tools libcamera-dev libcamera-apps \
