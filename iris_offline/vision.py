@@ -151,22 +151,29 @@ class Detector:
             # subsequent launch — the export takes ~30 seconds but only happens
             # the first time main.py is run after setup.
             if not ONNX_PATH.exists():
-                log.info("Exporting YOLOv8n to ONNX for faster CPU inference "
-                         "(one-time ~30s) ...")
-                _export_model = YOLO(str(MODEL_PATH))
-                _export_model.export(
-                    format="onnx",
-                    imgsz=FRAME_WIDTH,
-                    half=False,
-                    dynamic=False,
-                    simplify=True,
-                    opset=12,
-                )
-                if ONNX_PATH.exists():
-                    log.info("ONNX export complete → %s", ONNX_PATH)
-                else:
-                    log.warning("ONNX export did not produce expected file; "
-                                "falling back to .pt")
+                try:
+                    log.info("Exporting YOLOv8n to ONNX for faster CPU inference "
+                             "(one-time ~30s) ...")
+                    _export_model = YOLO(str(MODEL_PATH))
+                    _export_model.export(
+                        format="onnx",
+                        imgsz=FRAME_WIDTH,
+                        half=False,
+                        dynamic=False,
+                        simplify=True,
+                        opset=12,
+                    )
+                    if ONNX_PATH.exists():
+                        log.info("ONNX export complete → %s", ONNX_PATH)
+                    else:
+                        log.warning("ONNX export did not produce expected file; "
+                                    "will use .pt this run")
+                except Exception as export_exc:
+                    log.warning(
+                        "ONNX export failed (%s) — running with .pt (slower). "
+                        "Run: pip install onnx onnxslim onnxruntime  in the venv to fix.",
+                        export_exc,
+                    )
 
             load_path = str(ONNX_PATH) if ONNX_PATH.exists() else str(MODEL_PATH)
             log.info("Loading model: %s", load_path)
@@ -279,7 +286,9 @@ class VisionThread(threading.Thread):
                 self._state.add_error("Camera read error")
                 self._camera.release()
                 time.sleep(self._RECONNECT_DELAY)
-                self._camera.open()
+                if self._camera.open():
+                    # Camera recovered — remove stale camera errors from the list
+                    self._state.clear_error_prefix("Camera")
                 continue
 
             fps = self._fps.tick()

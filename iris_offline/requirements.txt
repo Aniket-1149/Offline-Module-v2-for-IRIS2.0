@@ -10,6 +10,7 @@ ultralytics>=8.0.200         # YOLOv8n — installs torch CPU automatically
 numpy>=1.24,<2.0             # Pinned <2.0 for ultralytics compat
 onnxruntime>=1.16            # ONNX runtime — 2-3× faster CPU inference than .pt
 onnx>=1.14                   # ONNX model format (used by ultralytics export)
+onnxslim>=0.1.71             # ONNX graph optimizer — required by ultralytics export
 
 # ─── Computer vision ────────────────────────────────────────────────────────
 # Use headless build on Raspberry Pi (no Qt dependency)

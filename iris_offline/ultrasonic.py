@@ -210,6 +210,8 @@ class UltrasonicThread(threading.Thread):
     def _init_with_retry(self) -> None:
         while not self._state.is_shutdown_requested():
             if self._driver.setup():
+                # GPIO recovered — clear any prior HC-SR04 errors
+                self._state.clear_error_prefix("HC-SR04")
                 return
             self._state.add_error("HC-SR04 GPIO init failed, retrying")
             time.sleep(self._RETRY_INTERVAL)

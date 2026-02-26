@@ -121,14 +121,24 @@ class SharedState:
 
     def add_error(self, msg: str) -> None:
         with self._lock:
-            # Keep last 10 errors to prevent unbounded growth
+            # Deduplicate: skip if the most recent error is identical
+            if self._frame.errors and self._frame.errors[-1] == msg:
+                return
             self._frame.errors.append(msg)
+            # Keep at most 10 errors to prevent unbounded growth
             if len(self._frame.errors) > 10:
                 self._frame.errors.pop(0)
 
     def clear_errors(self) -> None:
         with self._lock:
             self._frame.errors.clear()
+
+    def clear_error_prefix(self, prefix: str) -> None:
+        """Remove all stored errors whose text starts with the given prefix."""
+        with self._lock:
+            self._frame.errors = [
+                e for e in self._frame.errors if not e.startswith(prefix)
+            ]
 
     # -- Read ----------------------------------------------------------------
 
