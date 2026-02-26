@@ -150,10 +150,10 @@ When the script finishes, reboot to activate I2C and camera changes:
 sudo reboot
 ```
 
-After reboot, run IRIS manually from the terminal:
+After reboot, run IRIS from the terminal (as the `pi` user — no `sudo -u iris` needed):
 
 ```bash
-sudo -u iris /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py
+/opt/iris_offline/venv/bin/python /opt/iris_offline/main.py
 ```
 
 The OpenCV dashboard window will open and the JSON API will be live.
@@ -206,7 +206,7 @@ git push
                      ──────→  sudo bash /opt/iris_offline/update.sh
                                ✓ pulled 3 files
                                ✓ code synced
-                     run IRIS: sudo -u iris /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py
+                     run IRIS: /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py
 ```
 
 If you ever need to fully re-install from scratch (new Pi, or something broken):

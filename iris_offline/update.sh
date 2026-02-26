@@ -89,7 +89,7 @@ section
 info "=== Update Complete ==="
 echo ""
 echo "  Code is synced. Run IRIS manually:"
-echo "    sudo -u iris /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
+echo "    /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
 echo ""
 echo "  JSON endpoint  : https://${PI_IP}:5000/vision"
 section

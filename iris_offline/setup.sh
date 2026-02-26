@@ -73,6 +73,7 @@ if $FRESH_INSTALL; then
         python3 python3-pip python3-venv python3-dev \
         python3-opencv python3-picamera2 \
         libopencv-dev \
+        python3-lgpio lgpio \
         libhdf5-dev \
         libopenblas-dev libblas-dev liblapack-dev \
         libjpeg-dev libpng-dev \
@@ -151,14 +152,23 @@ else
 fi
 
 chown -R "${IRIS_USER}:${IRIS_USER}" "${INSTALL_DIR}"
+# Allow the logged-in user (pi) to run the code directly without sudo -u iris
+chmod -R o+rX "${INSTALL_DIR}"
 
 # ─── 6. Python virtual environment ────────────────────────────────────────────
 info "Step 6: Setting up Python virtual environment..."
+# Must use --system-site-packages so the venv can see python3-picamera2 (system package)
+if [[ -d "${VENV_DIR}" ]]; then
+    if ! grep -q "include-system-site-packages = true" "${VENV_DIR}/pyvenv.cfg" 2>/dev/null; then
+        warn "  Recreating venv with --system-site-packages (required for picamera2)..."
+        rm -rf "${VENV_DIR}"
+    fi
+fi
 if [[ ! -d "${VENV_DIR}" ]]; then
-    python3 -m venv "${VENV_DIR}"
+    python3 -m venv --system-site-packages "${VENV_DIR}"
     info "  Virtual environment created"
 else
-    info "  Virtual environment exists — skipping creation"
+    info "  Virtual environment OK (system-site-packages enabled)"
 fi
 "${VENV_DIR}/bin/pip" install --upgrade pip wheel setuptools -q
 
@@ -174,9 +184,14 @@ apt-get install -y -qq python3-numpy 2>/dev/null || true
     "pyopenssl>=23.0" \
     "cryptography>=41.0" \
     "smbus2>=0.4" \
-    "RPi.GPIO>=0.7" \
+    "rpi-lgpio" \
     "werkzeug>=3.0" \
     -q
+
+# ultralytics pulls in opencv-python (Qt GUI build) as a dependency —
+# force it back to headless so we don't need a display to import cv2
+"${VENV_DIR}/bin/pip" install --force-reinstall "opencv-python-headless>=4.8" -q
+info "  Forced opencv-python-headless (removes Qt dependency from ultralytics)"
 
 # Download YOLOv8n model only if not already present
 if [[ ! -f "${INSTALL_DIR}/yolov8n.pt" ]]; then
@@ -284,7 +299,7 @@ if $FRESH_INSTALL; then
     warn "REBOOT REQUIRED to activate I2C and camera interface changes."
     echo ""
     echo "  After reboot, run IRIS manually:"
-    echo "    sudo -u iris /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
+    echo "    /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
     echo ""
     if [[ -n "${REPO_URL}" ]]; then
         echo "  ─── Updating later ──────────────────────────────────────────"
@@ -293,6 +308,6 @@ if $FRESH_INSTALL; then
     fi
 else
     echo "  Code is up to date. Run IRIS manually:"
-    echo "    sudo -u iris /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
+    echo "    /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
 fi
 section
