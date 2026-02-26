@@ -97,15 +97,42 @@ def main() -> None:
     log.info("JSON endpoint: https://localhost:5000/vision")
     log.info("Video stream:  https://localhost:5000/stream")
 
-    # Heartbeat loop — keep main thread alive and log periodic status
-    HEARTBEAT_INTERVAL = 30.0   # seconds
-    last_heartbeat = time.time()
+    # ── Live status display ────────────────────────────────────────────────
+    # Prints a single overwriting line every 0.5 s so you can see detections
+    # and sensor readings without flooding the terminal with new log lines.
+    # A proper log.info heartbeat still fires every 30 s for the journal.
+    STATUS_INTERVAL    = 0.5    # seconds between live-status refreshes
+    LOG_INTERVAL       = 30.0   # seconds between log.info heartbeats
+    last_status = 0.0
+    last_log    = time.time()
 
     try:
         while not state.is_shutdown_requested():
-            time.sleep(0.5)
+            time.sleep(0.1)   # tight loop so shutdown is responsive
+            now = time.time()
 
-            if time.time() - last_heartbeat >= HEARTBEAT_INTERVAL:
+            # ── live terminal status (overwrites previous line) ────────────
+            if now - last_status >= STATUS_INTERVAL:
+                snap = state.snapshot()
+                if snap.detections:
+                    det_str = ", ".join(
+                        f"{d.name}({d.confidence:.0%})"
+                        for d in snap.detections[:6]
+                    )
+                else:
+                    det_str = "nothing detected"
+                status_line = (
+                    f"  FPS={snap.fps:.1f}  "
+                    f"dist={snap.distance_feet:.2f}ft  "
+                    f"fall={snap.fall.status}  "
+                    f"[{det_str}]  "
+                    f"status={snap.system_status}"
+                )
+                print(f"\r{status_line:<130}", end="", flush=True)
+                last_status = now
+
+            # ── periodic log.info heartbeat (for systemd journal / file) ──
+            if now - last_log >= LOG_INTERVAL:
                 snap = state.snapshot()
                 log.info(
                     "Heartbeat | FPS=%.1f | dist=%.2fft | fall=%s | status=%s | errors=%d",
@@ -115,7 +142,7 @@ def main() -> None:
                     snap.system_status,
                     len(snap.errors),
                 )
-                last_heartbeat = time.time()
+                last_log = now
 
     except KeyboardInterrupt:
         log.info("KeyboardInterrupt received")

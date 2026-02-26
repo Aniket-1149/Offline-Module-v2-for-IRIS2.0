@@ -40,6 +40,7 @@ FRAME_WIDTH  = 640
 FRAME_HEIGHT = 480
 CONFIDENCE_THRESHOLD = 0.45
 MODEL_PATH = Path(__file__).parent / "yolov8n.pt"   # gets downloaded automatically on first run
+ONNX_PATH  = MODEL_PATH.with_suffix(".onnx")         # exported on first run for faster CPU inference
 
 # all 80 object categories that YOLOv8n knows about (standard COCO dataset)
 COCO_NAMES = [
@@ -144,9 +145,34 @@ class Detector:
         if not _YOLO_AVAILABLE:
             return False
         try:
-            log.info("Loading YOLOv8n model from %s ...", MODEL_PATH)
-            self._model = YOLO(str(MODEL_PATH))
-            # run a blank frame through the model once so the first real frame isn't slow
+            # ── one-time ONNX export ──────────────────────────────────────────
+            # ONNX inference via onnxruntime is 2-3× faster than the PyTorch .pt
+            # on CPU (Pi 5 ARM64). We export once and reuse the .onnx on every
+            # subsequent launch — the export takes ~30 seconds but only happens
+            # the first time main.py is run after setup.
+            if not ONNX_PATH.exists():
+                log.info("Exporting YOLOv8n to ONNX for faster CPU inference "
+                         "(one-time ~30s) ...")
+                _export_model = YOLO(str(MODEL_PATH))
+                _export_model.export(
+                    format="onnx",
+                    imgsz=FRAME_WIDTH,
+                    half=False,
+                    dynamic=False,
+                    simplify=True,
+                    opset=12,
+                )
+                if ONNX_PATH.exists():
+                    log.info("ONNX export complete → %s", ONNX_PATH)
+                else:
+                    log.warning("ONNX export did not produce expected file; "
+                                "falling back to .pt")
+
+            load_path = str(ONNX_PATH) if ONNX_PATH.exists() else str(MODEL_PATH)
+            log.info("Loading model: %s", load_path)
+            self._model = YOLO(load_path)
+
+            # warm-up pass so the first real frame isn't slow
             dummy = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), dtype=np.uint8)
             self._model.predict(
                 dummy,
@@ -156,7 +182,7 @@ class Detector:
                 device="cpu",
             )
             self._ready = True
-            log.info("YOLOv8n ready")
+            log.info("YOLOv8n ready (ONNX=%s)", ONNX_PATH.exists())
             return True
         except Exception as exc:
             log.error("YOLOv8n load failed: %s", exc)
@@ -226,7 +252,7 @@ class VisionThread(threading.Thread):
     """
 
     _RECONNECT_DELAY = 3.0   # how long to wait before trying to reopen the camera
-    _SKIP_FRAMES     = 1     # inference every other frame — halves CPU load with barely any accuracy loss
+    _SKIP_FRAMES     = 0     # run YOLO on every frame — ONNX is fast enough on Pi 5
 
     def __init__(self, state: SharedState) -> None:
         super().__init__(name="VisionThread", daemon=True)
