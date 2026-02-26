@@ -1,6 +1,9 @@
 # IRIS 2.0 Offline Module — Python Requirements
 # Install via: pip install -r requirements.txt
-# Or use setup.sh for full automated setup.
+#
+# NOTE: picamera2 is NOT listed here because it must be installed as a
+# system package on Raspberry Pi OS, not via pip.
+# Install it with: sudo apt install -y python3-picamera2
 
 # ─── Core inference ──────────────────────────────────────────────────────────
 ultralytics>=8.0.200         # YOLOv8n — installs torch CPU automatically
