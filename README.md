@@ -1,11 +1,7 @@
 # IRIS 2.0 — Intelligent Retinal Interpretation System
-### An Offline AI Vision Assistant for the Visually Impaired
-
-**GitHub:** [thekaushal01/Offline-Module-v2-for-IRIS2.0](https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0)
-
-IRIS 2.0 runs entirely offline on a **Raspberry Pi 5 (8GB)**, helping visually impaired users navigate their environment safely.
-It detects nearby objects, measures obstacle distance, monitors for falls, and streams structured data to a companion mobile app — which handles text-to-speech announcements.
-No internet connection required. Designed for real-world, long-term wearable or portable use.
+IRIS 2.0 runs entirely offline on a **Raspberry Pi 5**, helping visually impaired users navigate their environment safely.
+It detects nearby objects, measures obstacle distance, monitors for falls, and streams structured data to a companion mobile app (which handles text-to-speech announcements, as well as it also handle Online Version of IRIS 2.0).
+No internet connection required.
 
 ---
 
@@ -23,7 +19,7 @@ No internet connection required. Designed for real-world, long-term wearable or 
 
 ## Hardware Required
 
-- Raspberry Pi 5 (8GB)
+- Raspberry Pi 5
 - Pi Camera Module (any CSI camera — Camera Module v2/v3, HQ Camera, ArduCam)
 - HC-SR04 Ultrasonic Sensor
 - MPU9250 IMU breakout board
