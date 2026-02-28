@@ -1,4 +1,4 @@
-# IRIS 2.0 — Intelligent Real-time Inference System
+# IRIS 2.0 — Intelligent Retinal Interpretation System
 ### An Offline AI Vision Assistant for the Visually Impaired
 
 **GitHub:** [thekaushal01/Offline-Module-v2-for-IRIS2.0](https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0)
@@ -396,4 +396,3 @@ MIT — Internal deployment only. Not for redistribution.
 
 ---
 
-[github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0](https://github.com/thekaushal01/Offline-Module-v2-for-IRIS2.0)
