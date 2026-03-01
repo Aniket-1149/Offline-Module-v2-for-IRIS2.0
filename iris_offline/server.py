@@ -14,7 +14,6 @@ See setup.sh for the openssl command.
 import json
 import logging
 import os
-import subprocess
 import threading
 import time
 from dataclasses import asdict
@@ -175,7 +174,6 @@ class ServerThread(threading.Thread):
 
     def run(self) -> None:
         log.info("ServerThread starting on %s:%d", self._host, self._port)
-        self._free_port()
         ssl_context = self._get_ssl_context()
 
         try:
@@ -190,22 +188,6 @@ class ServerThread(threading.Thread):
         except Exception as exc:
             log.critical("Flask server crashed: %s", exc)
             self._state.add_error(f"Server crash: {exc}")
-
-    def _free_port(self) -> None:
-        """Kill any process already occupying our port so Flask can bind cleanly."""
-        try:
-            # fuser -k <port>/tcp sends SIGKILL to whatever owns the port
-            result = subprocess.run(
-                ["fuser", "-k", f"{self._port}/tcp"],
-                capture_output=True,
-            )
-            if result.returncode == 0:
-                log.info("Freed port %d (killed stale process)", self._port)
-                time.sleep(0.5)   # give the OS a moment to release the socket
-        except FileNotFoundError:
-            pass  # fuser not present on this system — not a problem
-        except Exception as exc:
-            log.debug("_free_port: %s", exc)
 
     def _get_ssl_context(self):
         if CERT_FILE.exists() and KEY_FILE.exists():

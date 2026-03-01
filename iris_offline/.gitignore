@@ -7,7 +7,6 @@
 *.p12
 
 # YOLO model weights (large binary — distribute separately)
-# Note: yolov8n_ncnn_model/ is intentionally NOT excluded — it is committed to the repo
 *.pt
 *.onnx
 

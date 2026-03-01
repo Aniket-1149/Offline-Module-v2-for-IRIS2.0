@@ -39,7 +39,7 @@ from utils import SharedState, Detection, FPSCounter
 FRAME_WIDTH  = 640
 FRAME_HEIGHT = 480
 CONFIDENCE_THRESHOLD = 0.45
-NCNN_MODEL_DIR = Path(__file__).parent / "yolov8n_ncnn_model"  # .bin + .param files
+MODEL_PATH = Path(__file__).parent / "yolov8n.pt"   # gets downloaded automatically on first run
 
 # all 80 object categories that YOLOv8n knows about (standard COCO dataset)
 COCO_NAMES = [
@@ -143,18 +143,9 @@ class Detector:
     def load(self) -> bool:
         if not _YOLO_AVAILABLE:
             return False
-        if not NCNN_MODEL_DIR.exists():
-            log.error(
-                "NCNN model folder not found: %s\n"
-                "Make sure yolov8n_ncnn_model/ (containing model.ncnn.bin and "
-                "model.ncnn.param) is in the same directory as main.py.",
-                NCNN_MODEL_DIR,
-            )
-            return False
         try:
-            log.info("Loading NCNN model from %s ...", NCNN_MODEL_DIR)
-            self._model = YOLO(str(NCNN_MODEL_DIR))
-
+            log.info("Loading YOLOv8n model from %s ...", MODEL_PATH)
+            self._model = YOLO(str(MODEL_PATH))
             # warm-up pass so the first real frame isn't slow
             dummy = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), dtype=np.uint8)
             self._model.predict(
@@ -165,7 +156,7 @@ class Detector:
                 device="cpu",
             )
             self._ready = True
-            log.info("YOLOv8n ready | backend=NCNN")
+            log.info("YOLOv8n ready")
             return True
         except Exception as exc:
             log.error("YOLOv8n load failed: %s", exc)
@@ -234,8 +225,7 @@ class VisionThread(threading.Thread):
     so the server and UI always have something fresh to show.
     """
 
-    _RECONNECT_DELAY = 3.0   # how long to wait before trying to reopen the camera
-    _SKIP_FRAMES     = 0     # run YOLO on every frame — ONNX is fast enough on Pi 5
+    _RECONNECT_DELAY = 3.0   # seconds before trying to reopen a failed camera
 
     def __init__(self, state: SharedState) -> None:
         super().__init__(name="VisionThread", daemon=True)
@@ -252,37 +242,26 @@ class VisionThread(threading.Thread):
         if not self._camera.open():
             self._state.add_error("Camera failed to open at startup")
 
-        skip_counter = 0
-
         while not self._state.is_shutdown_requested():
             ok, frame = self._camera.read()
 
             if not ok or frame is None:
-                log.warning("Camera read failed — attempting reconnect in %.1fs", self._RECONNECT_DELAY)
+                log.warning("Camera read failed — reconnecting in %.1fs", self._RECONNECT_DELAY)
                 self._state.add_error("Camera read error")
                 self._camera.release()
                 time.sleep(self._RECONNECT_DELAY)
                 if self._camera.open():
-                    # Camera recovered — remove stale camera errors from the list
                     self._state.clear_error_prefix("Camera")
                 continue
 
             fps = self._fps.tick()
 
-            # only run YOLO on every other frame to keep CPU usage manageable
-            skip_counter = (skip_counter + 1) % (self._SKIP_FRAMES + 1)
-            if skip_counter == 0:
-                try:
-                    detections, annotated = self._detector.infer(frame)
-                except Exception as exc:
-                    log.error("Inference error: %s", exc)
-                    detections, annotated = [], frame.copy()
-                    self._state.add_error(f"Inference error: {exc}")
-            else:
-                # skipped frame — carry over the previous detections, just update the image
-                snap = self._state.snapshot()
-                detections  = snap.detections
-                annotated   = frame.copy()
+            try:
+                detections, annotated = self._detector.infer(frame)
+            except Exception as exc:
+                log.error("Inference error: %s", exc)
+                detections, annotated = [], frame.copy()
+                self._state.add_error(f"Inference error: {exc}")
 
             self._state.update_vision(detections, fps, frame, annotated)
 

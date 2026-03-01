@@ -78,7 +78,6 @@ if $FRESH_INSTALL; then
         libopenblas-dev libblas-dev liblapack-dev \
         libjpeg-dev libpng-dev \
         i2c-tools libcamera-dev rpicam-apps \
-        cmake build-essential libgomp1 \
         openssl git rsync htop iotop logrotate
 
     # ─── 3. Enable I2C, Camera, GPU memory ───────────────────────────────────
@@ -137,7 +136,6 @@ if [[ -n "${REPO_URL}" ]]; then
         --exclude='venv/' \
         --exclude='*.pem' \
         --exclude='yolov8n.pt' \
-        --exclude='yolov8n.onnx' \
         --exclude='.iris_config' \
         "${REPO_DIR}/iris_offline/" "${INSTALL_DIR}/"
     # Save repo URL for future re-runs
@@ -146,7 +144,7 @@ if [[ -n "${REPO_URL}" ]]; then
 else
     # Fallback: copy from the directory this script is running from
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    rsync -a --exclude='venv/' --exclude='*.pem' --exclude='yolov8n.pt' --exclude='yolov8n.onnx' \
+    rsync -a --exclude='venv/' --exclude='*.pem' --exclude='yolov8n.pt' \
         "${SCRIPT_DIR}/" "${INSTALL_DIR}/"
     warn "  No REPO_URL provided — copied from ${SCRIPT_DIR}"
     warn "  To enable one-command updates next time, re-run with your repo URL:"
@@ -176,64 +174,26 @@ fi
 
 # ─── 7. Python dependencies ───────────────────────────────────────────────────
 info "Step 7: Installing/updating Python dependencies..."
-apt-get install -y -qq python3-numpy 2>/dev/null || true
+"${VENV_DIR}/bin/pip" install -r "${INSTALL_DIR}/requirements.txt" --no-cache-dir -q
 
-"${VENV_DIR}/bin/pip" install --no-cache-dir \
-    "numpy>=1.24,<2.0" \
-    "opencv-python-headless>=4.8" \
-    "ultralytics>=8.0.200" \
-    "flask>=3.0" \
-    "pyopenssl>=23.0" \
-    "cryptography>=41.0" \
-    "smbus2>=0.4" \
-    "rpi-lgpio" \
-    "werkzeug>=3.0" \
-    -q
-
-# ultralytics pulls in opencv-python (Qt GUI build) as a dependency —
-# force it back to headless so we don't need a display to import cv2
+# ultralytics silently pulls in opencv-python (Qt GUI build) —
+# force headless so no display is needed to import cv2
 "${VENV_DIR}/bin/pip" install --force-reinstall "opencv-python-headless>=4.8" -q
-info "  Forced opencv-python-headless (removes Qt dependency from ultralytics)"
+info "  Forced opencv-python-headless (removes Qt dependency)"
 
-# Verify NCNN model folder is present (comes from git via rsync above)
-if [[ -d "${INSTALL_DIR}/yolov8n_ncnn_model" ]]; then
-    info "Step 7b: NCNN model present — OK"
+# Download YOLOv8n model only if not already present
+if [[ ! -f "${INSTALL_DIR}/yolov8n.pt" ]]; then
+    info "  Downloading YOLOv8n model (~6MB)..."
+    "${VENV_DIR}/bin/python" -c "
+from ultralytics import YOLO
+import shutil, pathlib
+YOLO('yolov8n.pt')
+src = pathlib.Path('yolov8n.pt')
+if src.exists():
+    shutil.copy(src, '${INSTALL_DIR}/yolov8n.pt')
+"
 else
-    warn "Step 7b: yolov8n_ncnn_model/ not found in ${INSTALL_DIR}"
-    warn "  Make sure yolov8n_ncnn_model/ (model.ncnn.bin + model.ncnn.param) is"
-    warn "  committed to the repo and re-run this script."
-fi
-
-# ─── 7c. Build ncnn Python bindings from source ──────────────────────────────
-# ncnn has no Python 3.13 ARM64 wheel on PyPI (only up to cp312).
-# We build from source once; subsequent runs skip the build entirely.
-if "${VENV_DIR}/bin/python" -c "import ncnn" 2>/dev/null; then
-    info "Step 7c: ncnn already built and installed — skipping"
-else
-    info "Step 7c: Building ncnn Python bindings from source (~8 min on Pi 5)..."
-    info "  (This happens once only. Go grab a coffee ☕)"
-    apt-get install -y -qq cmake build-essential libgomp1   # ensure build tools present
-    NCNN_SRC="/tmp/ncnn_src"
-    rm -rf "${NCNN_SRC}"
-    git clone https://github.com/Tencent/ncnn --depth 1 "${NCNN_SRC}"
-    cd "${NCNN_SRC}"
-    git submodule update --init --depth 1 -- glslang
-    mkdir -p build && cd build
-    cmake .. \
-        -DNCNN_PYTHON=ON \
-        -DNCNN_BUILD_TOOLS=OFF \
-        -DNCNN_BUILD_EXAMPLES=OFF \
-        -DNCNN_BUILD_TESTS=OFF \
-        -DNCNN_VULKAN=OFF \
-        -DNCNN_DISABLE_RTTI=OFF \
-        -DNCNN_DISABLE_EXCEPTION=OFF \
-        -DCMAKE_BUILD_TYPE=Release
-    make -j4
-    cd "${NCNN_SRC}/python"
-    "${VENV_DIR}/bin/pip" install . -q
-    cd /
-    rm -rf "${NCNN_SRC}"
-    info "  ncnn built and installed into venv ✔"
+    info "  YOLOv8n model already present — skipping download"
 fi
 
 # ─── 8. TLS certificate ───────────────────────────────────────────────────────
