@@ -137,8 +137,9 @@ def main() -> None:
     threads = _start_all_threads(state)
 
     log.info("All systems running. Press Ctrl+C or SIGTERM to stop.")
-    log.info("JSON endpoint: https://localhost:5000/vision")
-    log.info("Video stream:  https://localhost:5000/stream")
+    log.info("JSON poll  : https://localhost:5000/vision")
+    log.info("SSE push   : https://localhost:5000/events")
+    log.info("Video stream: https://localhost:5000/stream")
 
     # ── Live status display ────────────────────────────────────────────────
     # Prints a single overwriting line every 0.5 s so you can see detections

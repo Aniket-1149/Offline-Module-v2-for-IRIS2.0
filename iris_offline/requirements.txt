@@ -14,10 +14,7 @@ numpy>=1.24,<2.0             # Pinned <2.0 for ultralytics compat
 opencv-python-headless>=4.8
 
 # ─── Web server ─────────────────────────────────────────────────────────────
-flask>=3.0
-werkzeug>=3.0
-pyopenssl>=23.0              # HTTPS SSL context for Flask
-cryptography>=41.0           # Required by pyopenssl
+# Server uses Python stdlib (http.server + ssl) — no Flask/Werkzeug needed
 
 # ─── Hardware I/O ────────────────────────────────────────────────────────────
 smbus2>=0.4                  # I2C for MPU9250
