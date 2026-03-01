@@ -72,7 +72,6 @@ rsync -a --delete \
     --exclude='*.pem' \
     --exclude='yolov8n.pt' \
     --exclude='yolov8n.onnx' \
-    --exclude='yolov8n_ncnn_model/' \
     --exclude='.iris_config' \
     "${REPO_DIR}/iris_offline/" "${INSTALL_DIR}/"
 chown -R iris:iris "${INSTALL_DIR}"

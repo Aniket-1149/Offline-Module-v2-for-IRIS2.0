@@ -6,12 +6,9 @@
 # Install it with: sudo apt install -y python3-picamera2
 
 # ─── Core inference ──────────────────────────────────────────────────────────
-ultralytics>=8.0.200         # YOLOv8n — installs torch CPU automatically
+ultralytics>=8.0.200         # YOLOv8n loader (also handles NCNN inference)
 numpy>=1.24,<2.0             # Pinned <2.0 for ultralytics compat
-ncnn                         # NCNN runtime — fastest CPU inference on ARM (Pi 5)
-onnxruntime>=1.16            # ONNX runtime — fallback if NCNN unavailable
-onnx>=1.14                   # ONNX model format (used by ultralytics export)
-onnxslim>=0.1.71             # ONNX graph optimizer — required by ultralytics export
+ncnn                         # NCNN runtime — fastest CPU inference on Pi 5 ARM64 (~20-25 FPS)
 
 # ─── Computer vision ────────────────────────────────────────────────────────
 # Use headless build on Raspberry Pi (no Qt dependency)

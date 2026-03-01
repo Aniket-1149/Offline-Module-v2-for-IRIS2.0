@@ -137,7 +137,6 @@ if [[ -n "${REPO_URL}" ]]; then
         --exclude='*.pem' \
         --exclude='yolov8n.pt' \
         --exclude='yolov8n.onnx' \
-        --exclude='yolov8n_ncnn_model/' \
         --exclude='.iris_config' \
         "${REPO_DIR}/iris_offline/" "${INSTALL_DIR}/"
     # Save repo URL for future re-runs
@@ -146,7 +145,7 @@ if [[ -n "${REPO_URL}" ]]; then
 else
     # Fallback: copy from the directory this script is running from
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    rsync -a --exclude='venv/' --exclude='*.pem' --exclude='yolov8n.pt' --exclude='yolov8n.onnx' --exclude='yolov8n_ncnn_model/' \
+    rsync -a --exclude='venv/' --exclude='*.pem' --exclude='yolov8n.pt' --exclude='yolov8n.onnx' \
         "${SCRIPT_DIR}/" "${INSTALL_DIR}/"
     warn "  No REPO_URL provided — copied from ${SCRIPT_DIR}"
     warn "  To enable one-command updates next time, re-run with your repo URL:"
@@ -195,19 +194,13 @@ apt-get install -y -qq python3-numpy 2>/dev/null || true
 "${VENV_DIR}/bin/pip" install --force-reinstall "opencv-python-headless>=4.8" -q
 info "  Forced opencv-python-headless (removes Qt dependency from ultralytics)"
 
-# Download YOLOv8n model only if not already present
-if [[ ! -f "${INSTALL_DIR}/yolov8n.pt" ]]; then
-    info "  Downloading YOLOv8n model (~6MB)..."
-    "${VENV_DIR}/bin/python" -c "
-from ultralytics import YOLO
-import shutil, pathlib
-YOLO('yolov8n.pt')
-src = pathlib.Path('yolov8n.pt')
-if src.exists():
-    shutil.copy(src, '${INSTALL_DIR}/yolov8n.pt')
-"
+# Verify NCNN model folder is present (comes from git via rsync above)
+if [[ -d "${INSTALL_DIR}/yolov8n_ncnn_model" ]]; then
+    info "Step 7b: NCNN model present — OK"
 else
-    info "  YOLOv8n model already present — skipping download"
+    warn "Step 7b: yolov8n_ncnn_model/ not found in ${INSTALL_DIR}"
+    warn "  Make sure yolov8n_ncnn_model/ (model.ncnn.bin + model.ncnn.param) is"
+    warn "  committed to the repo and re-run this script."
 fi
 
 # ─── 8. TLS certificate ───────────────────────────────────────────────────────
