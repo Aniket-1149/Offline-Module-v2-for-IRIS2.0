@@ -121,8 +121,8 @@ class SharedState:
 
     def add_error(self, msg: str) -> None:
         with self._lock:
-            # Deduplicate: skip if the most recent error is identical
-            if self._frame.errors and self._frame.errors[-1] == msg:
+            # Deduplicate: skip if this exact error is already in the list
+            if msg in self._frame.errors:
                 return
             self._frame.errors.append(msg)
             # Keep at most 10 errors to prevent unbounded growth
