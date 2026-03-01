@@ -39,8 +39,9 @@ from utils import SharedState, Detection, FPSCounter
 FRAME_WIDTH  = 640
 FRAME_HEIGHT = 480
 CONFIDENCE_THRESHOLD = 0.45
-MODEL_PATH = Path(__file__).parent / "yolov8n.pt"   # gets downloaded automatically on first run
-ONNX_PATH  = MODEL_PATH.with_suffix(".onnx")         # exported on first run for faster CPU inference
+MODEL_PATH      = Path(__file__).parent / "yolov8n.pt"              # downloaded on first run
+ONNX_PATH       = MODEL_PATH.with_suffix(".onnx")                  # exported as fallback
+NCNN_MODEL_DIR  = MODEL_PATH.parent / "yolov8n_ncnn_model"         # fastest on Pi 5 ARM
 
 # all 80 object categories that YOLOv8n knows about (standard COCO dataset)
 COCO_NAMES = [
@@ -145,37 +146,45 @@ class Detector:
         if not _YOLO_AVAILABLE:
             return False
         try:
-            # ── one-time ONNX export ──────────────────────────────────────────
-            # ONNX inference via onnxruntime is 2-3× faster than the PyTorch .pt
-            # on CPU (Pi 5 ARM64). We export once and reuse the .onnx on every
-            # subsequent launch — the export takes ~30 seconds but only happens
-            # the first time main.py is run after setup.
-            if not ONNX_PATH.exists():
+            # ── Model priority: NCNN (fastest ARM) ✔ → ONNX → .pt ──────────────
+            # NCNN is 2–3× faster than ONNX on Pi 5 Cortex-A76 (~20–25 FPS).
+            # The yolov8n_ncnn_model/ folder is committed to the repo and
+            # synced to the Pi via update.sh — no export needed.
+            # ONNX is tried next; if also absent we fall back to .pt.
+
+            if NCNN_MODEL_DIR.exists():
+                load_path = str(NCNN_MODEL_DIR)
+                log.info("NCNN model found → using %s", load_path)
+            else:
+                # ── Try exporting NCNN first ─────────────────────────────
                 try:
-                    log.info("Exporting YOLOv8n to ONNX for faster CPU inference "
-                             "(one-time ~30s) ...")
-                    _export_model = YOLO(str(MODEL_PATH))
-                    _export_model.export(
-                        format="onnx",
-                        imgsz=FRAME_WIDTH,
-                        half=False,
-                        dynamic=False,
-                        simplify=True,
-                        opset=12,
-                    )
-                    if ONNX_PATH.exists():
-                        log.info("ONNX export complete → %s", ONNX_PATH)
+                    log.info("Exporting YOLOv8n to NCNN (one-time ~60s) ...")
+                    _m = YOLO(str(MODEL_PATH))
+                    _m.export(format="ncnn", imgsz=FRAME_WIDTH, half=False)
+                    if NCNN_MODEL_DIR.exists():
+                        log.info("NCNN export complete → %s", NCNN_MODEL_DIR)
+                        load_path = str(NCNN_MODEL_DIR)
                     else:
-                        log.warning("ONNX export did not produce expected file; "
-                                    "will use .pt this run")
-                except Exception as export_exc:
-                    log.warning(
-                        "ONNX export failed (%s) — running with .pt (slower). "
-                        "Run: pip install onnx onnxslim onnxruntime  in the venv to fix.",
-                        export_exc,
+                        raise RuntimeError("NCNN export did not produce expected folder")
+                except Exception as ncnn_exc:
+                    log.warning("NCNN export failed (%s) — trying ONNX ...", ncnn_exc)
+                    # ── Try exporting ONNX as second option ───────────────
+                    if not ONNX_PATH.exists():
+                        try:
+                            log.info("Exporting YOLOv8n to ONNX (one-time ~30s) ...")
+                            _m2 = YOLO(str(MODEL_PATH))
+                            _m2.export(
+                                format="onnx", imgsz=FRAME_WIDTH,
+                                half=False, dynamic=False, simplify=True, opset=12,
+                            )
+                            log.info("ONNX export complete → %s", ONNX_PATH)
+                        except Exception as onnx_exc:
+                            log.warning("ONNX export also failed (%s) — using .pt",
+                                        onnx_exc)
+                    load_path = (
+                        str(ONNX_PATH) if ONNX_PATH.exists() else str(MODEL_PATH)
                     )
 
-            load_path = str(ONNX_PATH) if ONNX_PATH.exists() else str(MODEL_PATH)
             log.info("Loading model: %s", load_path)
             self._model = YOLO(load_path)
 
@@ -189,7 +198,9 @@ class Detector:
                 device="cpu",
             )
             self._ready = True
-            log.info("YOLOv8n ready (ONNX=%s)", ONNX_PATH.exists())
+            log.info("YOLOv8n ready | backend=%s",
+                     "NCNN" if NCNN_MODEL_DIR.exists() else
+                     ("ONNX" if ONNX_PATH.exists() else "PyTorch"))
             return True
         except Exception as exc:
             log.error("YOLOv8n load failed: %s", exc)

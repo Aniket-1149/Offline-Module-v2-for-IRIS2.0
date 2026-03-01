@@ -137,6 +137,7 @@ if [[ -n "${REPO_URL}" ]]; then
         --exclude='*.pem' \
         --exclude='yolov8n.pt' \
         --exclude='yolov8n.onnx' \
+        --exclude='yolov8n_ncnn_model/' \
         --exclude='.iris_config' \
         "${REPO_DIR}/iris_offline/" "${INSTALL_DIR}/"
     # Save repo URL for future re-runs
@@ -145,7 +146,7 @@ if [[ -n "${REPO_URL}" ]]; then
 else
     # Fallback: copy from the directory this script is running from
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    rsync -a --exclude='venv/' --exclude='*.pem' --exclude='yolov8n.pt' --exclude='yolov8n.onnx' \
+    rsync -a --exclude='venv/' --exclude='*.pem' --exclude='yolov8n.pt' --exclude='yolov8n.onnx' --exclude='yolov8n_ncnn_model/' \
         "${SCRIPT_DIR}/" "${INSTALL_DIR}/"
     warn "  No REPO_URL provided — copied from ${SCRIPT_DIR}"
     warn "  To enable one-command updates next time, re-run with your repo URL:"

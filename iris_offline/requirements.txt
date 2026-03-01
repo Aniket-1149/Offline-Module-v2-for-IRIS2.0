@@ -8,7 +8,8 @@
 # ─── Core inference ──────────────────────────────────────────────────────────
 ultralytics>=8.0.200         # YOLOv8n — installs torch CPU automatically
 numpy>=1.24,<2.0             # Pinned <2.0 for ultralytics compat
-onnxruntime>=1.16            # ONNX runtime — 2-3× faster CPU inference than .pt
+ncnn                         # NCNN runtime — fastest CPU inference on ARM (Pi 5)
+onnxruntime>=1.16            # ONNX runtime — fallback if NCNN unavailable
 onnx>=1.14                   # ONNX model format (used by ultralytics export)
 onnxslim>=0.1.71             # ONNX graph optimizer — required by ultralytics export
 
