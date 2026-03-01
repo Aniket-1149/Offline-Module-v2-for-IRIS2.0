@@ -14,6 +14,7 @@ See setup.sh for the openssl command.
 import json
 import logging
 import os
+import socket
 import threading
 import time
 from dataclasses import asdict
@@ -177,14 +178,28 @@ class ServerThread(threading.Thread):
         ssl_context = self._get_ssl_context()
 
         try:
-            self._app.run(
-                host=self._host,
-                port=self._port,
+            from werkzeug.serving import make_server as _make_server
+            srv = _make_server(
+                self._host,
+                self._port,
+                self._app,
                 ssl_context=ssl_context,
                 threaded=True,
-                use_reloader=False,
-                debug=False,
             )
+            # Allow rapid restarts — prevents 'Address already in use' if
+            # the OS hasn't released the socket after the previous run
+            srv.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            log.info("Flask HTTPS server listening on %s:%d", self._host, self._port)
+            srv.serve_forever()
+        except OSError as exc:
+            if "Address already in use" in str(exc):
+                log.critical(
+                    "Port %d still in use after kill attempt. "
+                    "Run:  pkill -f main.py  then restart.", self._port
+                )
+            else:
+                log.critical("Flask server crashed: %s", exc)
+            self._state.add_error(f"Server crash: {exc}")
         except Exception as exc:
             log.critical("Flask server crashed: %s", exc)
             self._state.add_error(f"Server crash: {exc}")

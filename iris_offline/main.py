@@ -6,6 +6,7 @@ Orchestrates all threads and handles graceful shutdown.
 import logging
 import os
 import signal
+import subprocess
 import sys
 import time
 
@@ -24,6 +25,33 @@ from ui import UIThread
 # ---------------------------------------------------------------------------
 
 log = configure_logging(logging.INFO)
+
+
+def _kill_previous_instance() -> None:
+    """
+    Kill any previous main.py process so it releases port 5000 before we start.
+    Without this, running IRIS a second time always crashes with 'Address already in use'.
+    """
+    my_pid = os.getpid()
+    killed = []
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "iris_offline/main.py"],
+            capture_output=True, text=True
+        )
+        for line in result.stdout.strip().splitlines():
+            try:
+                pid = int(line.strip())
+                if pid != my_pid:
+                    os.kill(pid, signal.SIGTERM)
+                    killed.append(pid)
+            except (ValueError, ProcessLookupError):
+                pass
+    except FileNotFoundError:
+        pass  # pgrep not available
+    if killed:
+        log.info("Stopped previous IRIS process(es): %s — waiting for port release...", killed)
+        time.sleep(2.0)
 
 
 def _build_state() -> SharedState:
@@ -89,6 +117,8 @@ def main() -> None:
     log.info("IRIS 2.0 Offline Module — Starting up")
     log.info("=" * 60)
 
+    _kill_previous_instance()
+
     state = _build_state()
     _register_signals(state)
     threads = _start_all_threads(state)
@@ -103,13 +133,20 @@ def main() -> None:
     # A proper log.info heartbeat still fires every 30 s for the journal.
     STATUS_INTERVAL    = 0.5    # seconds between live-status refreshes
     LOG_INTERVAL       = 30.0   # seconds between log.info heartbeats
+    STARTUP_CLEAR_DELAY = 12.0  # seconds after which transient init errors are cleared
     last_status = 0.0
     last_log    = time.time()
+    startup_cleared = False
 
     try:
         while not state.is_shutdown_requested():
             time.sleep(0.1)   # tight loop so shutdown is responsive
             now = time.time()
+
+            # ── clear transient startup errors once things have settled ───
+            if not startup_cleared and now - last_log >= STARTUP_CLEAR_DELAY:
+                state.clear_errors()
+                startup_cleared = True
 
             # ── live terminal status (overwrites previous line) ────────────
             if now - last_status >= STATUS_INTERVAL:
