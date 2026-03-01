@@ -205,6 +205,18 @@ class _Handler(BaseHTTPRequestHandler):
 # Server thread
 # ---------------------------------------------------------------------------
 
+def _get_local_ip() -> str:
+    """Best-effort: get the Pi's LAN IP so the startup log shows the real address."""
+    import socket as _socket
+    try:
+        s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "localhost"
+
 class ServerThread(threading.Thread):
     """
     Runs ThreadingHTTPServer + SSL in a daemon thread.
@@ -226,11 +238,9 @@ class ServerThread(threading.Thread):
     def run(self) -> None:
         log.info("ServerThread starting on %s:%d", self._host, self._port)
 
-        # Inject shared state — must happen before the first request arrives
         _Handler.state = self._state
-
-        # SO_REUSEADDR set on the class before bind() — prevents 'Address already in use'
         ThreadingHTTPServer.allow_reuse_address = True
+
         try:
             httpd = ThreadingHTTPServer((self._host, self._port), _Handler)
         except OSError as exc:
@@ -241,22 +251,38 @@ class ServerThread(threading.Thread):
             self._state.add_error(f"Server bind failed: {exc}")
             return
 
-        # Wrap socket with TLS
+        # Try to wrap with TLS. If anything fails (cert unreadable, wrong format,
+        # SSL library error) fall back to plain HTTP so the server always starts.
+        proto = "http"
         if CERT_FILE.exists() and KEY_FILE.exists():
-            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-            ctx.load_cert_chain(certfile=str(CERT_FILE), keyfile=str(KEY_FILE))
-            httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
-            proto = "https"
-            log.info("TLS enabled — cert=%s", CERT_FILE)
+            try:
+                ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                ctx.load_cert_chain(certfile=str(CERT_FILE), keyfile=str(KEY_FILE))
+                httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+                proto = "https"
+                log.info("TLS enabled — cert=%s", CERT_FILE)
+            except Exception as exc:
+                log.warning(
+                    "TLS setup failed (%s) — falling back to plain HTTP. "
+                    "Fix with: sudo chmod 644 /opt/iris_offline/key.pem", exc
+                )
         else:
-            proto = "http"
-            log.warning("cert.pem/key.pem not found — serving plain HTTP. Run setup.sh to fix.")
+            log.warning(
+                "cert.pem / key.pem not found — serving plain HTTP. "
+                "Run setup.sh to generate certs."
+            )
 
-        log.info("IRIS server ready:")
-        log.info("  JSON poll  : %s://%s:%d/vision",  proto, self._host, self._port)
-        log.info("  SSE push   : %s://%s:%d/events",  proto, self._host, self._port)
-        log.info("  Video      : %s://%s:%d/stream",  proto, self._host, self._port)
-        log.info("  Health     : %s://%s:%d/health",  proto, self._host, self._port)
+        pi_ip = self._host if self._host != "0.0.0.0" else _get_local_ip()
+        log.info("=" * 50)
+        log.info("IRIS server up on %s", proto.upper())
+        log.info("  JSON   : %s://%s:%d/vision",  proto, pi_ip, self._port)
+        log.info("  SSE    : %s://%s:%d/events",  proto, pi_ip, self._port)
+        log.info("  Stream : %s://%s:%d/stream",  proto, pi_ip, self._port)
+        log.info("  Health : %s://%s:%d/health",  proto, pi_ip, self._port)
+        log.info("=" * 50)
+
+        # print to console too so it's visible even without reading logs
+        print(f"\n  IRIS server: {proto}://{pi_ip}:{self._port}/vision\n", flush=True)
 
         try:
             httpd.serve_forever()

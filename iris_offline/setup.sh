@@ -208,8 +208,12 @@ if [[ ! -f "${INSTALL_DIR}/cert.pem" ]] || \
         -out    "${INSTALL_DIR}/cert.pem" \
         -subj   "/CN=iris-offline/O=IRIS2/C=US" \
         -addext "subjectAltName=IP:${PI_IP},IP:127.0.0.1,DNS:localhost"
-    chmod 640 "${INSTALL_DIR}/key.pem" "${INSTALL_DIR}/cert.pem"
+    chmod 640 "${INSTALL_DIR}/key.pem"
+    chmod 644 "${INSTALL_DIR}/cert.pem"
     chown "${IRIS_USER}:${IRIS_USER}" "${INSTALL_DIR}/key.pem" "${INSTALL_DIR}/cert.pem"
+    # Give pi (and any other user) read access to the key so the server can start
+    # as the 'pi' user without sudo. key.pem is self-signed — not a production secret.
+    chmod o+r "${INSTALL_DIR}/key.pem"
     info "  Certificate generated for IP: ${PI_IP}"
 else
     info "Step 8: TLS certificate is valid — skipping regeneration"
