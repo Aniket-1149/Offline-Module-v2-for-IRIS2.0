@@ -8,7 +8,8 @@
 # ─── Core inference ──────────────────────────────────────────────────────────
 ultralytics>=8.0.200         # YOLOv8n loader (also handles NCNN inference)
 numpy>=1.24,<2.0             # Pinned <2.0 for ultralytics compat
-ncnn                         # NCNN runtime — fastest CPU inference on Pi 5 ARM64 (~20-25 FPS)
+# NOTE: ncnn is NOT installed via pip — no Python 3.13 ARM64 wheel exists on PyPI.
+# It is built from source by setup.sh (one-time ~8 min build).
 
 # ─── Computer vision ────────────────────────────────────────────────────────
 # Use headless build on Raspberry Pi (no Qt dependency)

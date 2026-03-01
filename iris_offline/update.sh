@@ -80,7 +80,32 @@ chown -R iris:iris "${INSTALL_DIR}"
 info "Checking Python dependencies..."
 "${VENV_DIR}/bin/pip" install -r "${INSTALL_DIR}/requirements.txt" -q
 info "  Dependencies up to date"
-
+# ncnn is not on PyPI for Python 3.13 ARM64 — rebuild from source if missing
+if ! "${VENV_DIR}/bin/python" -c "import ncnn" 2>/dev/null; then
+    info "ncnn not found in venv — rebuilding from source (~8 min)..."
+    apt-get install -y -qq cmake build-essential libgomp1
+    NCNN_SRC="/tmp/ncnn_src"
+    rm -rf "${NCNN_SRC}"
+    git clone https://github.com/Tencent/ncnn --depth 1 "${NCNN_SRC}"
+    cd "${NCNN_SRC}"
+    git submodule update --init --depth 1 -- glslang
+    mkdir -p build && cd build
+    cmake .. \
+        -DNCNN_PYTHON=ON \
+        -DNCNN_BUILD_TOOLS=OFF \
+        -DNCNN_BUILD_EXAMPLES=OFF \
+        -DNCNN_BUILD_TESTS=OFF \
+        -DNCNN_VULKAN=OFF \
+        -DNCNN_DISABLE_RTTI=OFF \
+        -DNCNN_DISABLE_EXCEPTION=OFF \
+        -DCMAKE_BUILD_TYPE=Release
+    make -j4
+    cd "${NCNN_SRC}/python"
+    "${VENV_DIR}/bin/pip" install . -q
+    cd /
+    rm -rf "${NCNN_SRC}"
+    info "  ncnn rebuilt ✔"
+fi
 # ─── 4. Reload systemd service file (in case it changed) ──────────────────────
 cp "${INSTALL_DIR}/iris_offline.service" /etc/systemd/system/
 systemctl daemon-reload

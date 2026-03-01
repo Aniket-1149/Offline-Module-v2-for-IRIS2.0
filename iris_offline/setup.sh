@@ -78,6 +78,7 @@ if $FRESH_INSTALL; then
         libopenblas-dev libblas-dev liblapack-dev \
         libjpeg-dev libpng-dev \
         i2c-tools libcamera-dev rpicam-apps \
+        cmake build-essential libgomp1 \
         openssl git rsync htop iotop logrotate
 
     # ─── 3. Enable I2C, Camera, GPU memory ───────────────────────────────────
@@ -201,6 +202,38 @@ else
     warn "Step 7b: yolov8n_ncnn_model/ not found in ${INSTALL_DIR}"
     warn "  Make sure yolov8n_ncnn_model/ (model.ncnn.bin + model.ncnn.param) is"
     warn "  committed to the repo and re-run this script."
+fi
+
+# ─── 7c. Build ncnn Python bindings from source ──────────────────────────────
+# ncnn has no Python 3.13 ARM64 wheel on PyPI (only up to cp312).
+# We build from source once; subsequent runs skip the build entirely.
+if "${VENV_DIR}/bin/python" -c "import ncnn" 2>/dev/null; then
+    info "Step 7c: ncnn already built and installed — skipping"
+else
+    info "Step 7c: Building ncnn Python bindings from source (~8 min on Pi 5)..."
+    info "  (This happens once only. Go grab a coffee ☕)"
+    apt-get install -y -qq cmake build-essential libgomp1   # ensure build tools present
+    NCNN_SRC="/tmp/ncnn_src"
+    rm -rf "${NCNN_SRC}"
+    git clone https://github.com/Tencent/ncnn --depth 1 "${NCNN_SRC}"
+    cd "${NCNN_SRC}"
+    git submodule update --init --depth 1 -- glslang
+    mkdir -p build && cd build
+    cmake .. \
+        -DNCNN_PYTHON=ON \
+        -DNCNN_BUILD_TOOLS=OFF \
+        -DNCNN_BUILD_EXAMPLES=OFF \
+        -DNCNN_BUILD_TESTS=OFF \
+        -DNCNN_VULKAN=OFF \
+        -DNCNN_DISABLE_RTTI=OFF \
+        -DNCNN_DISABLE_EXCEPTION=OFF \
+        -DCMAKE_BUILD_TYPE=Release
+    make -j4
+    cd "${NCNN_SRC}/python"
+    "${VENV_DIR}/bin/pip" install . -q
+    cd /
+    rm -rf "${NCNN_SRC}"
+    info "  ncnn built and installed into venv ✔"
 fi
 
 # ─── 8. TLS certificate ───────────────────────────────────────────────────────
