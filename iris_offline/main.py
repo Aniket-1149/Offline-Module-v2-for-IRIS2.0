@@ -29,15 +29,27 @@ log = configure_logging(logging.INFO)
 
 def _kill_previous_instance() -> None:
     """
-    Kill any previous main.py process so it releases port 5000 before we start.
-    Without this, running IRIS a second time always crashes with 'Address already in use'.
+    Kill any previous IRIS process so it releases port 5000 before we start.
+    Uses fuser (kills by port) as primary method — most reliable.
+    Falls back to pgrep on the full script path if fuser is unavailable.
     """
     my_pid = os.getpid()
+
+    # Primary: kill whatever owns port 5000 (works regardless of how it was launched)
+    try:
+        subprocess.run(["fuser", "-k", "-TERM", "5000/tcp"],
+                       capture_output=True, timeout=3)
+        time.sleep(1.5)
+        return
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Fallback: find and kill by script path
     killed = []
     try:
         result = subprocess.run(
-            ["pgrep", "-f", "iris_offline/main.py"],
-            capture_output=True, text=True
+            ["pgrep", "-f", "/opt/iris_offline/main.py"],
+            capture_output=True, text=True, timeout=3
         )
         for line in result.stdout.strip().splitlines():
             try:
@@ -47,8 +59,9 @@ def _kill_previous_instance() -> None:
                     killed.append(pid)
             except (ValueError, ProcessLookupError):
                 pass
-    except FileNotFoundError:
-        pass  # pgrep not available
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
     if killed:
         log.info("Stopped previous IRIS process(es): %s — waiting for port release...", killed)
         time.sleep(2.0)

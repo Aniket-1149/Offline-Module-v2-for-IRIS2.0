@@ -14,16 +14,14 @@ See setup.sh for the openssl command.
 import json
 import logging
 import os
-import socket
 import threading
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Generator
 
-from flask import Flask, Response, jsonify, g
+from flask import Flask, Response, jsonify
 
-from utils import SharedState, SensorFrame, Detection, FallState
+from utils import SharedState, SensorFrame
 
 log = logging.getLogger("iris.server")
 
@@ -178,7 +176,10 @@ class ServerThread(threading.Thread):
         ssl_context = self._get_ssl_context()
 
         try:
-            from werkzeug.serving import make_server as _make_server
+            from werkzeug.serving import make_server as _make_server, BaseWSGIServer
+            # SO_REUSEADDR must be set on the class BEFORE make_server() binds
+            # the socket — setting it afterwards is too late and has no effect.
+            BaseWSGIServer.allow_reuse_address = True
             srv = _make_server(
                 self._host,
                 self._port,
@@ -186,16 +187,13 @@ class ServerThread(threading.Thread):
                 ssl_context=ssl_context,
                 threaded=True,
             )
-            # Allow rapid restarts — prevents 'Address already in use' if
-            # the OS hasn't released the socket after the previous run
-            srv.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             log.info("Flask HTTPS server listening on %s:%d", self._host, self._port)
             srv.serve_forever()
         except OSError as exc:
             if "Address already in use" in str(exc):
                 log.critical(
-                    "Port %d still in use after kill attempt. "
-                    "Run:  pkill -f main.py  then restart.", self._port
+                    "Port %d still in use. Run:  sudo fuser -k 5000/tcp  then restart.",
+                    self._port,
                 )
             else:
                 log.critical("Flask server crashed: %s", exc)
