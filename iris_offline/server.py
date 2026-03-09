@@ -57,14 +57,29 @@ class WebSocketThread(threading.Thread):
         except websockets.ConnectionClosed:
             log.info("Client disconnected")
 
+        except Exception as e:
+            log.error(f"WebSocket handler error: {e}")
+
     async def run_server(self):
 
-        async with websockets.serve(self.handler, self.host, self.port):
+        try:
+            async with websockets.serve(
+                self.handler,
+                self.host,
+                self.port,
+                reuse_port=True,
+            ):
 
-            log.info(f"WebSocket running on ws://{self.host}:{self.port}")
+                log.info(f"WebSocket running on ws://{self.host}:{self.port}")
 
-            while not self.state.is_shutdown_requested():
-                await asyncio.sleep(1)
+                while not self.state.is_shutdown_requested():
+                    await asyncio.sleep(1)
+
+        except OSError as e:
+            log.error(f"WebSocket failed to start: {e}")
+
+        except Exception as e:
+            log.error(f"Unexpected WebSocket error: {e}")
 
     def run(self):
         asyncio.run(self.run_server())
