@@ -12,7 +12,6 @@ No internet connection required.
 | Object detection | YOLOv8n on CPU at 8–12 FPS |
 | Distance measurement | HC-SR04 ultrasonic at 10 Hz |
 | Fall detection | MPU9250 IMU via I2C at 50 Hz |
-| Live dashboard | OpenCV window on the display |
 | JSON stream | WebSocket server on port 8765 |
 
 ---
@@ -71,7 +70,6 @@ iris_offline/
 ├── vision.py             # camera capture + YOLOv8n inference
 ├── ultrasonic.py         # HC-SR04 distance polling
 ├── fall_detection.py     # MPU9250 I2C fall detection
-├── ui.py                 # OpenCV live dashboard
 ├── server.py             # WebSocket JSON stream server (port 8765)
 ├── utils.py              # shared state, data models, helpers
 ├── requirements.txt      # Python packages
@@ -151,7 +149,7 @@ After reboot, run IRIS from the terminal (as the `pi` user — no `sudo -u iris`
 /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py
 ```
 
-The OpenCV dashboard window will open and the WebSocket server will be live.
+The WebSocket server will be live on port 8765.
 Press `Ctrl+C` to stop.
 
 **Verify it's working** (open a second terminal while IRIS is running):
@@ -207,7 +205,7 @@ If you ever need to fully re-install from scratch (new Pi, or something broken):
 sudo bash /opt/iris_offline/setup.sh
 ```
 
-The same `setup.sh` does both full setup and re-setup. It skips steps that are already done (existing cert, existing user, etc.).
+The same `setup.sh` does both full setup and re-setup. It skips steps that are already done (existing user, model, etc.).
 
 ---
 

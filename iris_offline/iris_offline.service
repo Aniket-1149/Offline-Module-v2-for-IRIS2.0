@@ -21,8 +21,6 @@ StartLimitBurst=5
 
 # ─── Environment ────────────────────────────────────────────────────────────
 Environment="PYTHONUNBUFFERED=1"
-Environment="DISPLAY=:0"
-Environment="XAUTHORITY=/home/iris/.Xauthority"
 
 # ─── Resource limits (protect rest of system) ───────────────────────────────
 # 6 GB RAM ceiling — leaves 2 GB for OS

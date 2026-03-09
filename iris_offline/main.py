@@ -18,7 +18,6 @@ from vision import VisionThread
 from ultrasonic import UltrasonicThread
 from fall_detection import FallDetectionThread
 from server import WebSocketThread
-from ui import UIThread
 
 # ---------------------------------------------------------------------------
 # Bootstrap
@@ -29,7 +28,7 @@ log = configure_logging(logging.INFO)
 
 def _kill_previous_instance() -> None:
     """
-    Kill any previous IRIS process so it releases port 5000 before we start.
+    Kill any previous IRIS process so it releases port 8765 before we start.
     Uses fuser (kills by port) as primary method — most reliable.
     Falls back to pgrep on the full script path if fuser is unavailable.
     """
@@ -102,13 +101,6 @@ def _start_all_threads(state: SharedState):
     st.start()
     threads.append(st)
     log.info("Started %s", st.name)
-
-    # UI thread — must start last (some OS require window from main thread;
-    # on RPi with X11/Wayland this is fine in a thread)
-    ut = UIThread(state)
-    ut.start()
-    threads.append(ut)
-    log.info("Started %s", ut.name)
 
     return threads
 
