@@ -1,21 +1,7 @@
-# IRIS 2.0 Offline Module — Python Requirements
-# Install via: pip install -r requirements.txt
-#
-# NOTE: picamera2 is NOT listed here because it must be installed as a
-# system package on Raspberry Pi OS, not via pip.
-# Install it with: sudo apt install -y python3-picamera2
-
-# ─── Core inference ──────────────────────────────────────────────────────────
-ultralytics>=8.0.200         # YOLOv8n — installs torch CPU automatically
-numpy>=1.24,<2.0             # Pinned <2.0 for ultralytics compat
-
-# ─── Computer vision ────────────────────────────────────────────────────────
-# Use headless build on Raspberry Pi (no Qt dependency)
+ultralytics>=8.0.200
+numpy>=1.24,<2.0
 opencv-python-headless>=4.8
-
-# ─── Web server ─────────────────────────────────────────────────────────────
-# Server uses Python stdlib (http.server + ssl) — no Flask/Werkzeug needed
-
-# ─── Hardware I/O ────────────────────────────────────────────────────────────
-smbus2>=0.4                  # I2C for MPU9250
-rpi-lgpio                    # GPIO for HC-SR04 — Pi 5 compatible RPi.GPIO drop-in
+smbus2>=0.4
+rpi-lgpio
+pydantic>=2.6
+websockets>=12.0
