@@ -35,9 +35,9 @@ def _kill_previous_instance() -> None:
     """
     my_pid = os.getpid()
 
-    # Primary: kill whatever owns port 5000 (works regardless of how it was launched)
+    # Primary: kill whatever owns port 8765 (works regardless of how it was launched)
     try:
-        subprocess.run(["fuser", "-k", "-TERM", "5000/tcp"],
+        subprocess.run(["fuser", "-k", "-TERM", "8765/tcp"],
                        capture_output=True, timeout=3)
         time.sleep(1.5)
         return
@@ -137,9 +137,7 @@ def main() -> None:
     threads = _start_all_threads(state)
 
     log.info("All systems running. Press Ctrl+C or SIGTERM to stop.")
-    log.info("JSON poll  : https://localhost:5000/vision")
-    log.info("SSE push   : https://localhost:5000/events")
-    log.info("Video stream: https://localhost:5000/stream")
+    log.info("WebSocket  : ws://0.0.0.0:8765")
 
     # ── Live status display ────────────────────────────────────────────────
     # Prints a single overwriting line every 0.5 s so you can see detections

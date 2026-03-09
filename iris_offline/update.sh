@@ -89,5 +89,5 @@ echo ""
 echo "  Code is synced. Run IRIS manually:"
 echo "    /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
 echo ""
-echo "  JSON endpoint  : https://${PI_IP}:5000/vision"
+echo "  WebSocket stream : ws://${PI_IP}:8765"
 section

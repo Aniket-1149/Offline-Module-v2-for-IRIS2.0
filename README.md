@@ -13,7 +13,7 @@ No internet connection required.
 | Distance measurement | HC-SR04 ultrasonic at 10 Hz |
 | Fall detection | MPU9250 IMU via I2C at 50 Hz |
 | Live dashboard | OpenCV window on the display |
-| JSON API | Flask HTTPS server on port 5000 |
+| JSON stream | WebSocket server on port 8765 |
 
 ---
 
@@ -72,7 +72,7 @@ iris_offline/
 ├── ultrasonic.py         # HC-SR04 distance polling
 ├── fall_detection.py     # MPU9250 I2C fall detection
 ├── ui.py                 # OpenCV live dashboard
-├── server.py             # Flask HTTPS JSON server
+├── server.py             # WebSocket JSON stream server (port 8765)
 ├── utils.py              # shared state, data models, helpers
 ├── requirements.txt      # Python packages
 ├── iris_offline.service  # systemd service file (manual start)
@@ -134,7 +134,6 @@ The script handles everything automatically:
 - Creates the `iris` system user
 - Sets up a Python virtual environment
 - Downloads the YOLOv8n model
-- Generates a self-signed TLS certificate
 - Installs the systemd service file
 - Applies Pi 5 performance tuning
 
@@ -152,24 +151,22 @@ After reboot, run IRIS from the terminal (as the `pi` user — no `sudo -u iris`
 /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py
 ```
 
-The OpenCV dashboard window will open and the JSON API will be live.
+The OpenCV dashboard window will open and the WebSocket server will be live.
 Press `Ctrl+C` to stop.
 
 **Verify it's working** (open a second terminal while IRIS is running):
 
 ```bash
-# Quick health check
-curl -k https://localhost:5000/health
+# Check the WebSocket port is open
+ss -tlnp | grep 8765
 
-# Full JSON output (detections, distance, fall status)
-curl -k https://localhost:5000/vision
+# Quick JSON frame via wscat (install once: npm i -g wscat)
+wscat -c ws://localhost:8765
+# Each message is a JSON payload — press Ctrl+C to disconnect
 
-# Stream — get your Pi's IP first, then open in a browser on your PC
+# Get your Pi's IP to connect from the companion app
 hostname -I
-# Then open in any browser:  https://<pi_ip>:5000/stream
-# Or test locally on the Pi:
-curl -k --max-time 3 -o /dev/null -w "%{http_code}" https://localhost:5000/stream
-# Should print 200
+# App connects to:  ws://<pi_ip>:8765
 ```
 
 ---
@@ -186,7 +183,6 @@ This does: `git pull` → sync changed files → pip install (if needed). Takes 
 Then run IRIS again manually as usual.
 
 **What is preserved across updates:**
-- TLS certificate (`cert.pem` / `key.pem`) — never regenerated unless expired
 - YOLOv8n model (`yolov8n.pt`) — never re-downloaded
 - Python virtual environment — only updated if `requirements.txt` changed
 
@@ -215,9 +211,11 @@ The same `setup.sh` does both full setup and re-setup. It skips steps that are a
 
 ---
 
-## JSON API Reference
+## WebSocket API Reference
 
-**Main endpoint:** `GET https://<pi_ip>:5000/vision`
+**Endpoint:** `ws://<pi_ip>:8765`
+
+Connect with any WebSocket client. The server pushes a new JSON frame every 0.5 seconds.
 
 ```json
 {
@@ -244,13 +242,6 @@ The same `setup.sh` does both full setup and re-setup. It skips steps that are a
 | `clear` | Everything normal |
 | `warning` | Obstacle closer than 3 feet |
 | `emergency` | Fall detected |
-
-**Other endpoints:**
-
-| Endpoint | What it returns |
-|---|---|
-| `GET /health` | Quick liveness check with uptime and FPS |
-| `GET /stream` | MJPEG live video — open in any browser |
 
 ---
 
@@ -282,7 +273,7 @@ If the person moves again before the 3-second immobility window completes, the s
 | Inference speed | 8–12 FPS at 640×480 |
 | Ultrasonic polling | 10 Hz with 5-sample median filter |
 | Fall detection | 50 Hz |
-| JSON response time | < 50ms |
+| WebSocket push interval | 500ms |
 | RAM usage | < 500 MB total |
 | Continuous uptime | 8+ hours |
 
@@ -331,32 +322,23 @@ python3 -c "from picamera2 import Picamera2; print(Picamera2.global_camera_info(
 gpio -g read 24   # should read 0 at rest
 ```
 
-### HTTPS API not reachable
+### WebSocket not reachable
 ```bash
-curl -k https://localhost:5000/vision   # test locally first
-ss -tlnp | grep 5000                    # confirm port is open
-sudo journalctl -u iris_offline -f      # check for Flask errors
-# On mobile app: install cert.pem as a trusted CA to avoid SSL errors
-```
+ss -tlnp | grep 8765               # confirm port is open
+sudo journalctl -u iris_offline -f  # check for server errors
 
-### Stream endpoint not loading
-```bash
-# 1. Check IRIS is actually running
-ps aux | grep main.py
+# Test with wscat (npm i -g wscat)
+wscat -c ws://localhost:8765
+# Should immediately start receiving JSON frames
 
-# 2. Confirm port 5000 is open
-ss -tlnp | grep 5000
-
-# 3. Test the stream responds
-curl -k --max-time 3 -o /dev/null -w "%{http_code}" https://localhost:5000/stream
-# Should print 200. If it prints 000, Flask isn't running.
-
-# 4. Open in browser on your PC (accept the self-signed cert warning)
-# https://<pi_ip>:5000/stream
-# Get your Pi IP with:  hostname -I
-
-# 5. If browser says "certificate error" — click Advanced → Proceed
-# Or copy cert.pem from the Pi to your PC and install it as a trusted CA
+# Or with Python:
+python3 -c "
+import asyncio, websockets
+async def t():
+    async with websockets.connect('ws://localhost:8765') as ws:
+        print(await ws.recv())
+asyncio.run(t())
+"
 ```
 
 ### Low FPS
