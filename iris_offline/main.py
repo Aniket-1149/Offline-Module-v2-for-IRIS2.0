@@ -17,7 +17,7 @@ from utils import SharedState, configure_logging
 from vision import VisionThread
 from ultrasonic import UltrasonicThread
 from fall_detection import FallDetectionThread
-from server import ServerThread
+from server import WebSocketThread
 from ui import UIThread
 
 # ---------------------------------------------------------------------------
@@ -98,7 +98,7 @@ def _start_all_threads(state: SharedState):
     log.info("Started %s", vt.name)
 
     # HTTPS server thread
-    st = ServerThread(state, host="0.0.0.0", port=5000)
+    st = WebSocketThread(state, host="0.0.0.0", port=8765)
     st.start()
     threads.append(st)
     log.info("Started %s", st.name)
