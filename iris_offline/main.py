@@ -106,8 +106,8 @@ def _start_all_threads(state: SharedState):
     threads.append(vt)
     log.info("Started %s", vt.name)
 
-    # HTTPS server thread
-    st = ServerThread(state, host="0.0.0.0", port=5000)
+    # WebSocket server (sensor data + video stream)
+    st = ServerThread(state, host="0.0.0.0", port=8765)
     st.start()
     threads.append(st)
     log.info("Started %s", st.name)
@@ -146,9 +146,7 @@ def main() -> None:
     threads = _start_all_threads(state)
 
     log.info("All systems running. Press Ctrl+C or SIGTERM to stop.")
-    log.info("JSON poll  : https://localhost:5000/vision")
-    log.info("SSE push   : https://localhost:5000/events")
-    log.info("Video stream: https://localhost:5000/stream")
+    log.info("WebSocket JSON stream: ws://localhost:8765")
 
     # ── Live status display ────────────────────────────────────────────────
     # Prints a single overwriting line every 0.5 s so you can see detections
