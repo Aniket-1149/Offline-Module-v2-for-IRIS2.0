@@ -41,6 +41,15 @@ section
 info "=== IRIS 2.0 — Pulling Latest Code ==="
 section
 
+# ─── 0. Stop the running service so the new code takes effect cleanly ─────────
+if systemctl is-active --quiet iris_offline; then
+    info "Stopping iris_offline service..."
+    systemctl stop iris_offline
+    RESTART_SERVICE=1
+else
+    RESTART_SERVICE=0
+fi
+
 # ─── 1. Git pull ──────────────────────────────────────────────────────────────
 info "Fetching latest code from git..."
 BEFORE=$(git -C "${REPO_DIR}" rev-parse HEAD)
@@ -86,8 +95,22 @@ PI_IP=$(hostname -I | awk '{print $1}')
 section
 info "=== Update Complete ==="
 echo ""
-echo "  Code is synced. Run IRIS manually:"
-echo "    /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
+
+if [[ "${RESTART_SERVICE}" -eq 1 ]]; then
+    info "Restarting iris_offline service with new code..."
+    systemctl start iris_offline
+    echo ""
+    echo "  Service status: sudo systemctl status iris_offline"
+    echo "  Live logs     : sudo journalctl -u iris_offline -f"
+else
+    echo "  Service was not running. Start it with:"
+    echo "    sudo systemctl start iris_offline"
+    echo ""
+    echo "  Or run manually (stop service first to free ports):"
+    echo "    sudo systemctl stop iris_offline"
+    echo "    /opt/iris_offline/venv/bin/python /opt/iris_offline/main.py"
+fi
+
 echo ""
-echo "  WebSocket stream : ws://${PI_IP}:8765"
+echo "  JSON endpoint  : https://${PI_IP}:5000/vision"
 section
