@@ -17,7 +17,8 @@ from utils import SharedState, configure_logging
 from vision import VisionThread
 from ultrasonic import UltrasonicThread
 from fall_detection import FallDetectionThread
-from server import WebSocketThread
+from server import ServerThread
+from ui import UIThread
 
 # ---------------------------------------------------------------------------
 # Bootstrap
@@ -28,20 +29,29 @@ log = configure_logging(logging.INFO)
 
 def _kill_previous_instance() -> None:
     """
-    Kill any previous IRIS process so it releases port 8765 before we start.
+    Kill any previous IRIS process so it releases ports before we start.
+    Frees port 5000 (FastAPI server) and port 8765 (legacy standalone
+    WebSocket used by older deployments) so that upgrading in-place never
+    leaves a stale process occupying either port.
     Uses fuser (kills by port) as primary method — most reliable.
     Falls back to pgrep on the full script path if fuser is unavailable.
     """
     my_pid = os.getpid()
 
-    # Primary: kill whatever owns port 8765 (works regardless of how it was launched)
-    try:
-        subprocess.run(["fuser", "-k", "-TERM", "8765/tcp"],
-                       capture_output=True, timeout=3)
+    # Primary: kill whatever owns port 5000 and 8765
+    # (8765 is the legacy standalone-WebSocket port; harmless if nothing is there)
+    fuser_ok = False
+    for port_spec in ("5000/tcp", "8765/tcp"):
+        try:
+            subprocess.run(["fuser", "-k", "-TERM", port_spec],
+                           capture_output=True, timeout=3)
+            fuser_ok = True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            break   # fuser not available — fall through to pgrep fallback
+
+    if fuser_ok:
         time.sleep(1.5)
         return
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
 
     # Fallback: find and kill by script path
     killed = []
@@ -97,10 +107,17 @@ def _start_all_threads(state: SharedState):
     log.info("Started %s", vt.name)
 
     # HTTPS server thread
-    st = WebSocketThread(state, host="0.0.0.0", port=8765)
+    st = ServerThread(state, host="0.0.0.0", port=5000)
     st.start()
     threads.append(st)
     log.info("Started %s", st.name)
+
+    # UI thread — must start last (some OS require window from main thread;
+    # on RPi with X11/Wayland this is fine in a thread)
+    ut = UIThread(state)
+    ut.start()
+    threads.append(ut)
+    log.info("Started %s", ut.name)
 
     return threads
 
@@ -129,7 +146,9 @@ def main() -> None:
     threads = _start_all_threads(state)
 
     log.info("All systems running. Press Ctrl+C or SIGTERM to stop.")
-    log.info("WebSocket  : ws://0.0.0.0:8765")
+    log.info("JSON poll  : https://localhost:5000/vision")
+    log.info("SSE push   : https://localhost:5000/events")
+    log.info("Video stream: https://localhost:5000/stream")
 
     # ── Live status display ────────────────────────────────────────────────
     # Prints a single overwriting line every 0.5 s so you can see detections
