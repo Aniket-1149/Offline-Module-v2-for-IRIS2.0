@@ -18,7 +18,6 @@ from vision import VisionThread
 from ultrasonic import UltrasonicThread
 from fall_detection import FallDetectionThread
 from server import ServerThread
-from ui import UIThread
 
 # ---------------------------------------------------------------------------
 # Bootstrap
@@ -111,13 +110,6 @@ def _start_all_threads(state: SharedState):
     st.start()
     threads.append(st)
     log.info("Started %s", st.name)
-
-    # UI thread — must start last (some OS require window from main thread;
-    # on RPi with X11/Wayland this is fine in a thread)
-    ut = UIThread(state)
-    ut.start()
-    threads.append(ut)
-    log.info("Started %s", ut.name)
 
     return threads
 
