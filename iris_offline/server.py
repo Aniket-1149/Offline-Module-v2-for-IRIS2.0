@@ -80,6 +80,12 @@ class ServerThread(threading.Thread):
     async def _handler(self, websocket) -> None:
         """Push JSON sensor data to one connected client until it disconnects."""
         log.info("Client connected from %s", websocket.remote_address)
+        if self.state.is_shutdown_requested():
+            log.warning(
+                "Handler invoked but shutdown already requested — closing %s immediately",
+                websocket.remote_address,
+            )
+            return
         try:
             while not self.state.is_shutdown_requested():
                 await websocket.send(_build_payload(self.state))
@@ -87,7 +93,7 @@ class ServerThread(threading.Thread):
         except websockets.ConnectionClosed:
             log.info("Client disconnected from %s", websocket.remote_address)
         except Exception as exc:
-            log.error("WebSocket handler error: %s", exc)
+            log.error("WebSocket handler error for %s: %s", websocket.remote_address, exc, exc_info=True)
 
     async def _run_server(self) -> None:
         try:
