@@ -41,10 +41,11 @@ PUSH_INTERVAL = 0.5
 
 def _build_payload(state: SharedState) -> str:
     """Serialise the latest sensor readings to a JSON string."""
+    from datetime import datetime, timezone
     snap = state.snapshot()
 
     payload = SensorPayload(
-        timestamp=snap.timestamp,
+        timestamp=snap.timestamp or datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
         vision=[
             DetectionModel(name=d.name, confidence=d.confidence)
             for d in snap.detections

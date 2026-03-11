@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import List
-from datetime import datetime
 
 
 class DetectionModel(BaseModel):
@@ -14,7 +13,7 @@ class FallDetectionModel(BaseModel):
 
 
 class SensorPayload(BaseModel):
-    timestamp: datetime
+    timestamp: str
     vision: List[DetectionModel]
     distance_feet: float
     fall_detection: FallDetectionModel
